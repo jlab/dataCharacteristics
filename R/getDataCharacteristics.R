@@ -1,17 +1,9 @@
 
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 ##########################################################################################
-# library(dplyr)
-# library(matrixTests)
-# library(qvalue)
-# library(DescTools)
-# library(matrixcalc)
-# library(psych) 
-# library(stats)
-# library(foreach)
-# library(rlist)
-
+library(data.table)
+library(pcaMethods)
 #################################################################################
 # DATA CHARACTERISTICS
 
@@ -91,41 +83,65 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
   
   # var.groups.ratio <- median(matrixStats::rowVars(mtx[, 1:group.size], na.rm = TRUE)/matrixStats::rowVars(mtx[, (group.size+1):ncol(mtx)], na.rm = TRUE), na.rm = TRUE)
   
-  if (withNAs){
-    resultvec <- c(#KS.SignProp = KS.SignProp,
-                   entropy = entropy,
-                   kurtosis = kurtosis, 
-                   meanDeviation = meanDeviation,
-                   skewness = skewness,
-                   uniformity = uniformity,
-                   variance = variance, 
-                   RMS = RMS#,
-                   #var.groups.ratio = var.groups.ratio
-    )
-  } else {
-    t.mtx <- t(mtx)
-    t.mtx <- t.mtx[ , which(apply(t.mtx, 2, var) != 0)] # Remove zero variance columns 
-    pca <- stats::prcomp(t.mtx, scale.=T)
-    eigs <- pca$sdev^2
-    prctPC1 <- eigs[1]/sum(eigs)
-    prctPC2 <- eigs[2]/sum(eigs)
-    
-    elongation <- sqrt(eigs[2] / eigs[1]) # elongation
-    flatness <- sqrt(eigs[length(eigs)]/eigs[1]) # flatness
-    resultvec <- c(#KS.SignProp = KS.SignProp,
-                   entropy = entropy,
-                   kurtosis = kurtosis, 
-                   meanDeviation = meanDeviation,
-                   skewness = skewness,
-                   uniformity = uniformity,
-                   variance = variance, 
-                   RMS = RMS,
-                   #var.groups.ratio = var.groups.ratio,
-                   prctPC1 = prctPC1, 
-                   prctPC2 = prctPC2,
-                   elongation = elongation,
-                   flatness = flatness)
-  }
+  t.mtx <- t(mtx)
+  t.mtx <- t.mtx[ , which(apply(t.mtx, 2, var, na.rm = TRUE) != 0)] # Remove zero variance columns 
+  
+  prctPC1 <- NA
+  prctPC2 <- NA
+  try({
+    pca <- pcaMethods::pca(t.mtx, method="nipals", center = TRUE, maxSteps=5000)
+    prctPC1 <- pca@R2[1]
+    prctPC2 <- pca@R2[2]
+  })
+  
+  # if (withNAs){
+  #   resultvec <- c(#KS.SignProp = KS.SignProp,
+  #                  entropy = entropy,
+  #                  kurtosis = kurtosis, 
+  #                  meanDeviation = meanDeviation,
+  #                  skewness = skewness,
+  #                  uniformity = uniformity,
+  #                  variance = variance, 
+  #                  RMS = RMS#,
+  #                  #var.groups.ratio = var.groups.ratio
+  #   )
+  # } else {
+  # 
+  #   t.mtx <- t(mtx)
+  #   t.mtx <- t.mtx[ , which(apply(t.mtx, 2, var) != 0)] # Remove zero variance columns 
+  #   pca <- stats::prcomp(t.mtx, scale.=T)
+  #   eigs <- pca$sdev^2
+  #   prctPC1 <- eigs[1]/sum(eigs)
+  #   prctPC2 <- eigs[2]/sum(eigs)
+  #   
+  #   elongation <- sqrt(eigs[2] / eigs[1]) # elongation
+  #   flatness <- sqrt(eigs[length(eigs)]/eigs[1]) # flatness
+  #   resultvec <- c(#KS.SignProp = KS.SignProp,
+  #                  entropy = entropy,
+  #                  kurtosis = kurtosis, 
+  #                  meanDeviation = meanDeviation,
+  #                  skewness = skewness,
+  #                  uniformity = uniformity,
+  #                  variance = variance, 
+  #                  RMS = RMS,
+  #                  #var.groups.ratio = var.groups.ratio,
+  #                  prctPC1 = prctPC1, 
+  #                  prctPC2 = prctPC2,
+  #                  elongation = elongation,
+  #                  flatness = flatness)
+  # }
+  
+  resultvec <- c(
+    entropy = entropy,
+    kurtosis = kurtosis, 
+    meanDeviation = meanDeviation,
+    skewness = skewness,
+    uniformity = uniformity,
+    variance = variance, 
+    RMS = RMS,
+    #var.groups.ratio = var.groups.ratio,
+    prctPC1 = prctPC1, 
+    prctPC2 = prctPC2)
   return(resultvec)
 }
 
@@ -150,7 +166,7 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   corCoefType <- "spearman"
   cortest <- cor.test(colNaPercentage, colMeans, method = corCoefType)
   corPval <- cortest$p.value
-  corR <- cortest$estimate
+  corR <- unname(cortest$estimate)
   
   medianSampleVariance <- median(apply(df, 2, var,  na.rm=TRUE), na.rm = TRUE)
   medianProteinVariance <- median(unname(apply(df, 1, var,  na.rm=TRUE)), na.rm = TRUE)
@@ -208,6 +224,7 @@ readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
     "modifications",
     "charge",
     "retention_time",
+    "retention time",
     "taxid",
     "species",
     "database",
@@ -226,8 +243,10 @@ readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
     "chemical_shift",
     "multiplicity",
     "reliability",
+    "Reliability",
     "Functional group",
-    "Molecule source"
+    "Molecule source",
+    "KEGG_database_identifier"
     )
   
   dat2 <- dat[,colnames(dat) %notin% remove]
@@ -237,12 +256,16 @@ readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
   if(sum(dat$metabolite_identification != "") == nrow(dat)) 
     row.names(mtx) <- make.names(dat$metabolite_identification, unique=TRUE)
   
+  mtx[mtx == "BLQ"] <- 0
   if (zerosToNA) mtx[mtx == 0] <- NA
-  mtx[mtx == "NaN"] <- NA
+  mtx[mtx %in% c("NaN", "")] <- NA
   # remove rows with only NAs
   # mtx <- mtx[rowSums(is.na(mtx) | mtx == 0) != ncol(mtx), ]
   mtx <- subset(mtx, rowSums(is.na(mtx) | mtx == 0) != ncol(mtx))
   if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
+  
+  mtx <- apply(mtx, 2, gsub, pattern=",", replacement=".")
+  class(mtx) <- "numeric"
   mtx
 }
 
@@ -371,7 +394,8 @@ dataTypes <- c("metabolomics_MS", "metabolomics_NMR", "microarray",
                "RNAseq_transcripts_raw_undecorated", "RNAseq_transcripts_tpms",
                "sc_normalized", "sc_unnormalized", "microbiome")
 
-path <- "exampleFiles/"
+# path <- "exampleFiles/"
+path <- "./"
 
 lst <- list()
 for (dataType in dataTypes){
@@ -462,7 +486,7 @@ for (dataType in dataTypes){
   } 
 }
 
-library(data.table)
+
 lst.df <- rbindlist(lst, fill = TRUE)
 
 write.csv(lst.df, "dataCharacteristics.csv", row.names = FALSE)
