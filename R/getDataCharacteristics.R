@@ -71,11 +71,11 @@ calc_RMS <- function(data) sqrt(mean(data^2, na.rm=TRUE))
 getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
   #KS.SignProp <- kolSmirTestSignProp(mtx)
   
-  entropy <- calc_entropy(mtx)
+  entropy <- calc_entropy(mtx) #
   kurtosis <- calc_kurtosis(mtx)
   meanDeviation <- calc_meanDeviation(mtx)
   skewness <- calc_skewness(mtx)
-  uniformity <- calc_uniformity(mtx)
+  uniformity <- calc_uniformity(mtx) #
   variance <- calc_variance(mtx)
   RMS <- calc_RMS(mtx)
   
@@ -85,9 +85,8 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
   
   t.mtx <- t(mtx)
   t.mtx <- t.mtx[ , which(apply(t.mtx, 2, var, na.rm = TRUE) != 0)] # Remove zero variance columns 
-  
-  prctPC1 <- NA
-  prctPC2 <- NA
+
+  prctPC1 <- prctPC2 <- NA
   try({
     pca <- pcaMethods::pca(t.mtx, method="nipals", center = TRUE, maxSteps=5000)
     prctPC1 <- pca@R2[1]
@@ -404,7 +403,7 @@ for (dataType in dataTypes){
   if (dataType == "microarray"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                            rowLabelCol = "Gene ID", 
-                           colsToRemove = c("Gene ID", "Gene Name", "DesignElementAccession"),
+                           colsToRemove = c("Gene ID", "Gene Name", "DesignElementAccession", "Design Element"),
                            lst = lst)
   } else if (dataType == "RNAseq_raw"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
