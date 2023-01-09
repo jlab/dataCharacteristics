@@ -4,6 +4,8 @@
 ##########################################################################################
 library(data.table)
 library(pcaMethods)
+library(Matrix)
+library(foreach)
 #################################################################################
 # DATA CHARACTERISTICS
 
@@ -386,50 +388,42 @@ readInMaxQuantFiles <- function (filePath, quantColPattern = c("^LFQ ", "^iBAQ "
   return(mtx)
 }
 
-dataTypes <- c("metabolomics_MS", "metabolomics_NMR", "microarray",
-               "proteomics_expressionatlas", "proteomics_pride",
-               "RNAseq_fpkms_median",
-               "RNAseq_raw", "RNAseq_raw_undecorated", "RNAseq_tpms_median",
-               "RNAseq_transcripts_raw_undecorated", "RNAseq_transcripts_tpms",
-               "sc_normalized", "sc_unnormalized", "microbiome")
 
-# path <- "exampleFiles/"
-path <- "./"
-
-lst <- list()
-for (dataType in dataTypes){
+getDataCharacteristicsForDataType <- function(dataType) {
   print(dataType)
+  lst <- list()
+  path <- "./"
   dataTypePath <- paste0(path, dataType)
   if (dataType == "microarray"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
-                           rowLabelCol = "Gene ID", 
-                           colsToRemove = c("Gene ID", "Gene Name", "DesignElementAccession", "Design Element"),
-                           lst = lst)
+                                  rowLabelCol = "Gene ID", 
+                                  colsToRemove = c("Gene ID", "Gene Name", "DesignElementAccession", "Design Element"),
+                                  lst = lst)
   } else if (dataType == "RNAseq_raw"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
-                           rowLabelCol = "Gene ID", 
-                           colsToRemove = c("Gene ID", "Gene Name"),
-                           lst = lst)
+                                  rowLabelCol = "Gene ID", 
+                                  colsToRemove = c("Gene ID", "Gene Name"),
+                                  lst = lst)
   } else if (dataType == "RNAseq_raw_undecorated"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
-                           rowLabelCol = "Gene ID", 
-                           colsToRemove = c("Gene ID"),
-                           lst = lst)
+                                  rowLabelCol = "Gene ID", 
+                                  colsToRemove = c("Gene ID"),
+                                  lst = lst)
   } else if (dataType == "RNAseq_transcripts_raw_undecorated"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
-                           rowLabelCol = "Transcript ID", 
-                           colsToRemove = c("Transcript ID"),
-                           lst = lst)
+                                  rowLabelCol = "Transcript ID", 
+                                  colsToRemove = c("Transcript ID"),
+                                  lst = lst)
   } else if (dataType == "RNAseq_transcripts_tpms"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
-                           rowLabelCol = "GeneID", 
-                           colsToRemove = c("Gene ID", "Gene Name", "GeneID"),
-                           lst = lst)
+                                  rowLabelCol = "GeneID", 
+                                  colsToRemove = c("Gene ID", "Gene Name", "GeneID"),
+                                  lst = lst)
   } else if (dataType %in% c("RNAseq_fpkms_median", "RNAseq_tpms_median", "microbiome")){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
-                           rowLabelCol = 1, 
-                           colsToRemove = c(),
-                           lst = lst)
+                                  rowLabelCol = 1, 
+                                  colsToRemove = c(),
+                                  lst = lst)
   } else if (dataType == "proteomics_expressionatlas"){
     dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
     for (dataTypeFilePath in dataTypeFilePaths){
@@ -483,9 +477,35 @@ for (dataType in dataTypes){
       lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
     }
   } 
+  
+  lst.df <- rbindlist(lst, fill = TRUE)
+  write.csv(lst.df, paste0("dataCharacteristics_", dataType, ".csv"), row.names = FALSE)
+  
+  session <- sessionInfo()
+  sink(paste0("getDataCharacteristics_sessionInfo_ ", dataType, ".txt"))
+  print(session)
+  sink()
 }
 
+dataTypes <- c("metabolomics_MS", "metabolomics_NMR", "microarray",
+               "proteomics_expressionatlas", "proteomics_pride",
+               "RNAseq_fpkms_median",
+               "RNAseq_raw", "RNAseq_raw_undecorated", "RNAseq_tpms_median",
+               "RNAseq_transcripts_raw_undecorated", "RNAseq_transcripts_tpms",
+               "sc_normalized", "sc_unnormalized", "microbiome")
 
-lst.df <- rbindlist(lst, fill = TRUE)
+# path <- "exampleFiles/"
+#path <- "./"
 
-write.csv(lst.df, "dataCharacteristics.csv", row.names = FALSE)
+# lst <- list()
+# for (dataType in dataTypes){
+#   getDataCharacteristicsForDataType(dataType)
+# }
+
+cl <- parallel::makeCluster(7, outfile="")
+doParallel::registerDoParallel(cl)
+
+foreach(i = seq_along(dataTypes)) %dopar% {
+  getDataCharacteristicsForDataType(dataTypes[[i]])
+}
+parallel::stopCluster(cl)
