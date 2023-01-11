@@ -6,6 +6,9 @@ library(data.table)
 library(pcaMethods)
 library(Matrix)
 library(foreach)
+
+
+`%notin%` <- Negate(`%in%`)
 #################################################################################
 # DATA CHARACTERISTICS
 
@@ -89,11 +92,13 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
   t.mtx <- t.mtx[ , which(apply(t.mtx, 2, var, na.rm = TRUE) != 0)] # Remove zero variance columns 
 
   prctPC1 <- prctPC2 <- NA
-  try({
-    pca <- pcaMethods::pca(t.mtx, method="nipals", center = TRUE, maxSteps=5000)
-    prctPC1 <- pca@R2[1]
-    prctPC2 <- pca@R2[2]
-  })
+  if (!is.vector(t.mtx)){
+    try({
+      pca <- pcaMethods::pca(t.mtx, method="nipals", center = TRUE, maxSteps=5000)
+      prctPC1 <- pca@R2[1]
+      prctPC2 <- pca@R2[2]
+    })
+  }
   
   # if (withNAs){
   #   resultvec <- c(#KS.SignProp = KS.SignProp,
@@ -182,21 +187,25 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   mtx <- mtx[rowSums(is.na(mtx)) == 0, ]
   nFeatures.woNAs <- nrow(mtx) # number of proteins with no NAs
   
-  if (nFeatures.woNAs == 0){
-    characts.woNAs <- c(# KS.SignProp = NA,
-                        entropy = NA,
-                        kurtosis = NA, 
-                        meanDeviation = NA,
-                        skewness = NA,
-                        uniformity = NA,
-                        variance = NA, 
-                        RMS = NA)
-  } else {
+  if (is.vector(mtx) & length(mtx)>1){
     characts.woNAs <- getCharacteristicsHelper(mtx, withNAs=FALSE)
+  } else {
+    if (!is.vector(mtx) & nFeatures.woNAs == 0){
+      characts.woNAs <- c(# KS.SignProp = NA,
+                          entropy = NA,
+                          kurtosis = NA, 
+                          meanDeviation = NA,
+                          skewness = NA,
+                          uniformity = NA,
+                          variance = NA, 
+                          RMS = NA)
+    } else {
+      characts.woNAs <- getCharacteristicsHelper(mtx, withNAs=FALSE)
+    }
   }
 
   names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
-  list(c(list(datasetID = datasetID, dataType = dataType), 
+  list(c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
          c(nSamples = nSamples, nFeatures.wNAs = nFeatures.wNAs, nFeatures.woNAs = nFeatures.woNAs, 
            minRowNonNaNumber = minRowNonNaNumber, maxRowNonNaNumber = maxRowNonNaNumber,
            minRowNaPercentage = minRowNaPercentage, maxRowNaPercentage = maxRowNaPercentage, 
@@ -208,11 +217,9 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
 }
 ################################################################################
 
-`%notin%` <- Negate(`%in%`)
-
 readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
-  dat <- read.csv(filePath, allowEscapes = TRUE, check.names = FALSE, 
-                  sep = "\t")
+  #dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
+  dat <- data.frame(data.table::fread(filePath, check.names = FALSE, sep = "\t"), check.names = FALSE)
   
   remove <- c(
     "database_identifier",
@@ -288,16 +295,19 @@ readInAllMetabolightsFiles <- function(dataTypePath, lst = list(), zerosToNA = F
   lst
 }
 
-readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FALSE) {
-  dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
+readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FALSE, alternativeRowLabelCol = "") {
+  #dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
+  dat <- data.frame(data.table::fread(filePath, check.names = FALSE, sep = "\t"), check.names = FALSE)
+  
   if (is.character(rowLabelCol)){
     geneId <- dat[[rowLabelCol]]
   } else {
+    if (rowLabelCol %notin% colnames(dat) & alternativeRowLabelCol != "") rowLabelCol <- alternativeRowLabelCol
     geneId <- dat[, rowLabelCol]
     colsToRemove <- c(colsToRemove, colnames(dat)[rowLabelCol])
   }
     
-  dat <- data.frame(dat[,setdiff(colnames(dat), colsToRemove)])
+  dat <- data.frame(dat[, setdiff(colnames(dat), colsToRemove)])
   mtx <- as.matrix(dat)
   row.names(mtx) <- make.names(geneId, unique=TRUE)
   
@@ -310,7 +320,7 @@ readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FA
   mtx
 }
 
-readInAllDataTypeFiles <- function(dataTypePath, rowLabelCol, colsToRemove, zerosToNA = FALSE, lst = list()) {
+readInAllDataTypeFiles <- function(dataTypePath, rowLabelCol, colsToRemove, zerosToNA = FALSE, lst = list(), alternativeRowLabelCol = "") {
   dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
   for (dataTypeFilePath in dataTypeFilePaths){
     print(dataTypeFilePath)
@@ -318,7 +328,8 @@ readInAllDataTypeFiles <- function(dataTypePath, rowLabelCol, colsToRemove, zero
       mtx <- readInFile(filePath = dataTypeFilePath, 
                         rowLabelCol = rowLabelCol, 
                         colsToRemove = colsToRemove,
-                        zerosToNA = zerosToNA)
+                        zerosToNA = zerosToNA,
+                        alternativeRowLabelCol = alternativeRowLabelCol)
       # Only keep datasets with two dimensions
       if (!is.vector(mtx)) {
         lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
@@ -391,6 +402,7 @@ readInMaxQuantFiles <- function (filePath, quantColPattern = c("^LFQ ", "^iBAQ "
 
 getDataCharacteristicsForDataType <- function(dataType) {
   print(dataType)
+
   lst <- list()
   path <- "./"
   dataTypePath <- paste0(path, dataType)
@@ -407,8 +419,9 @@ getDataCharacteristicsForDataType <- function(dataType) {
   } else if (dataType == "RNAseq_raw_undecorated"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = "Gene ID", 
-                                  colsToRemove = c("Gene ID"),
-                                  lst = lst)
+                                  colsToRemove = c("Gene ID", "Gene"),
+                                  lst = lst,
+                                  alternativeRowLabelCol = "Gene")
   } else if (dataType == "RNAseq_transcripts_raw_undecorated"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = "Transcript ID", 
@@ -487,25 +500,27 @@ getDataCharacteristicsForDataType <- function(dataType) {
   sink()
 }
 
-dataTypes <- c("metabolomics_MS", "metabolomics_NMR", "microarray",
+dataTypes <- c("metabolomics_MS", "metabolomics_NMR",
                "proteomics_expressionatlas", "proteomics_pride",
+               "microbiome",
+               "sc_normalized", "sc_unnormalized",
                "RNAseq_fpkms_median",
                "RNAseq_raw", "RNAseq_raw_undecorated", "RNAseq_tpms_median",
                "RNAseq_transcripts_raw_undecorated", "RNAseq_transcripts_tpms",
-               "sc_normalized", "sc_unnormalized", "microbiome")
+               "microarray")
 
 # path <- "exampleFiles/"
 #path <- "./"
 
 # lst <- list()
-# for (dataType in dataTypes){
-#   getDataCharacteristicsForDataType(dataType)
-# }
-
-cl <- parallel::makeCluster(7, outfile="")
-doParallel::registerDoParallel(cl)
-
-foreach(i = seq_along(dataTypes)) %dopar% {
-  getDataCharacteristicsForDataType(dataTypes[[i]])
+for (dataType in dataTypes){
+  getDataCharacteristicsForDataType(dataType)
 }
-parallel::stopCluster(cl)
+
+# cl <- parallel::makeCluster(7, outfile="")
+# doParallel::registerDoParallel(cl)
+# 
+# foreach(i = seq_along(dataTypes)) %dopar% {
+#   getDataCharacteristicsForDataType(dataTypes[[i]])
+# }
+# parallel::stopCluster(cl)
