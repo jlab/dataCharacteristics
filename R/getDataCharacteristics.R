@@ -5,8 +5,7 @@
 library(data.table)
 library(pcaMethods)
 library(Matrix)
-library(foreach)
-
+# library(foreach)
 
 `%notin%` <- Negate(`%in%`)
 #################################################################################
@@ -151,10 +150,15 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
   return(resultvec)
 }
 
-getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
+
+getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
   mtx[mtx == 0] <- NA
-  df <- data.frame(mtx)
   
+  if (takeLog2) mtx <- log2(mtx)
+  
+  if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
+  
+  df <- data.frame(mtx)
   colMeans <- colMeans(mtx, na.rm = TRUE)
   #colMedians <- colMedians(mtx, na.rm = TRUE)
   colNaPercentage <- colMeans(is.na(mtx))*100
@@ -185,35 +189,62 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   nSamples <- ncol(mtx)
   nFeatures.wNAs <- nrow(mtx)
   mtx <- mtx[rowSums(is.na(mtx)) == 0, ]
-  nFeatures.woNAs <- nrow(mtx) # number of proteins with no NAs
+  
+  
+  if (is.vector(mtx)){
+    nFeatures.woNAs <- 1
+  } else {
+    nFeatures.woNAs <- nrow(mtx) # number of proteins with no NAs
+  }
   
   if (is.vector(mtx) & length(mtx)>1){
     characts.woNAs <- getCharacteristicsHelper(mtx, withNAs=FALSE)
   } else {
     if (!is.vector(mtx) & nFeatures.woNAs == 0){
       characts.woNAs <- c(# KS.SignProp = NA,
-                          entropy = NA,
-                          kurtosis = NA, 
-                          meanDeviation = NA,
-                          skewness = NA,
-                          uniformity = NA,
-                          variance = NA, 
-                          RMS = NA)
+        entropy = NA,
+        kurtosis = NA, 
+        meanDeviation = NA,
+        skewness = NA,
+        uniformity = NA,
+        variance = NA, 
+        RMS = NA)
     } else {
       characts.woNAs <- getCharacteristicsHelper(mtx, withNAs=FALSE)
     }
   }
-
   names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
-  list(c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
-         c(nSamples = nSamples, nFeatures.wNAs = nFeatures.wNAs, nFeatures.woNAs = nFeatures.woNAs, 
-           minRowNonNaNumber = minRowNonNaNumber, maxRowNonNaNumber = maxRowNonNaNumber,
-           minRowNaPercentage = minRowNaPercentage, maxRowNaPercentage = maxRowNaPercentage, 
-           minColNaPercentage = minColNaPercentage, maxColNaPercentage = maxColNaPercentage,
-           corPval = corPval, corR = corR,
-           medianSampleVariance = medianSampleVariance, medianProteinVariance = medianProteinVariance, 
-           percNATotal = percNATotal, percOfRowsWithNAs = percOfRowsWithNAs, 
-           characts.wNAs, characts.woNAs)))
+  
+  c(nSamples = nSamples, nFeatures.wNAs = nFeatures.wNAs, nFeatures.woNAs = nFeatures.woNAs, 
+    minRowNonNaNumber = minRowNonNaNumber, maxRowNonNaNumber = maxRowNonNaNumber,
+    minRowNaPercentage = minRowNaPercentage, maxRowNaPercentage = maxRowNaPercentage, 
+    minColNaPercentage = minColNaPercentage, maxColNaPercentage = maxColNaPercentage,
+    corPval = corPval, corR = corR,
+    medianSampleVariance = medianSampleVariance, medianProteinVariance = medianProteinVariance, 
+    percNATotal = percNATotal, percOfRowsWithNAs = percOfRowsWithNAs, 
+    characts.wNAs, characts.woNAs)
+}
+
+
+getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
+
+  charact.noLog <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = FALSE)
+  names(charact.noLog) <- paste0(names(charact.noLog), ".log2")
+  charact.log <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = TRUE)
+  names(charact.log) <- paste0(names(charact.log), ".noLog2")
+  
+  c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
+         c(charact.noLog, charact.log))
+  
+  # list(c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
+  #        c(nSamples = nSamples, nFeatures.wNAs = nFeatures.wNAs, nFeatures.woNAs = nFeatures.woNAs, 
+  #          minRowNonNaNumber = minRowNonNaNumber, maxRowNonNaNumber = maxRowNonNaNumber,
+  #          minRowNaPercentage = minRowNaPercentage, maxRowNaPercentage = maxRowNaPercentage, 
+  #          minColNaPercentage = minColNaPercentage, maxColNaPercentage = maxColNaPercentage,
+  #          corPval = corPval, corR = corR,
+  #          medianSampleVariance = medianSampleVariance, medianProteinVariance = medianProteinVariance, 
+  #          percNATotal = percNATotal, percOfRowsWithNAs = percOfRowsWithNAs, 
+  #          characts.wNAs, characts.woNAs)))
 }
 ################################################################################
 
