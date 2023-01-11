@@ -229,9 +229,9 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
 getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
 
   charact.noLog <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = FALSE)
-  names(charact.noLog) <- paste0(names(charact.noLog), ".log2")
+  names(charact.noLog) <- paste0(names(charact.noLog), ".noLog2")
   charact.log <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = TRUE)
-  names(charact.log) <- paste0(names(charact.log), ".noLog2")
+  names(charact.log) <- paste0(names(charact.log), ".log2")
   
   c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
          c(charact.noLog, charact.log))
