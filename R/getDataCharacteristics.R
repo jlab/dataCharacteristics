@@ -222,6 +222,7 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
 getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   
   mtx[mtx == 0] <- NA
+  mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
 
   nSamples <- ncol(mtx)
   #colMedians <- colMedians(mtx, na.rm = TRUE)
