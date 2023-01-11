@@ -152,41 +152,37 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
 
 
 getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
-  mtx[mtx == 0] <- NA
-  
+
   if (takeLog2) mtx <- log2(mtx)
   
-  if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
+  # if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
   
   df <- data.frame(mtx)
-  colMeans <- colMeans(mtx, na.rm = TRUE)
-  #colMedians <- colMedians(mtx, na.rm = TRUE)
+ 
   colNaPercentage <- colMeans(is.na(mtx))*100
-  rowNaPercentage <- rowMeans(is.na(mtx))*100
-  minRowNonNaNumber <- min(rowSums(!is.na(mtx)))
-  maxRowNonNaNumber <- max(rowSums(!is.na(mtx)))
-  # numberMissingMatrix <- sum(is.na(mtx))
-  minRowNaPercentage <- min(rowNaPercentage)            
-  maxRowNaPercentage <- max(rowNaPercentage)
-  minColNaPercentage <- min(colNaPercentage)
-  maxColNaPercentage <- max(colNaPercentage)
+  colMeans <- colMeans(mtx, na.rm = TRUE)
   
+  rowNaPercentage <- rowMeans(is.na(mtx))*100
+  rowMeans <- rowMeans(mtx, na.rm = TRUE)
+
   # Positive correlation of pride datasets only due to LFQ?
   # Compare correlation when taking "Intensity " and "LFQ " columns for PXD020490/proteinGroups.txt
   corCoefType <- "spearman"
-  cortest <- cor.test(colNaPercentage, colMeans, method = corCoefType)
-  corPval <- cortest$p.value
-  corR <- unname(cortest$estimate)
+  cortestCol <- cor.test(colNaPercentage, colMeans, method = corCoefType)
+  corColPval <- cortestCol$p.value
+  corColR <- unname(cortestCol$estimate)
+  
+  cortestRow <- cor.test(rowNaPercentage, rowMeans, method = corCoefType)
+  corRowPval <- cortestRow$p.value
+  corRowR <- unname(cortestRow$estimate)
   
   medianSampleVariance <- median(apply(df, 2, var,  na.rm=TRUE), na.rm = TRUE)
   medianProteinVariance <- median(unname(apply(df, 1, var,  na.rm=TRUE)), na.rm = TRUE)
   #KS.SignProp <- kolSmirTestSignProp(as.matrix(df))
-  percNATotal <- mean(is.na(df)) * 100 
-  percOfRowsWithNAs <- sum(apply(df, 1, anyNA))/nrow(df) * 100
+
   characts.wNAs <- getCharacteristicsHelper(mtx, withNAs=TRUE)
   names(characts.wNAs) <- paste0(names(characts.wNAs), ".wNAs")
-  
-  nSamples <- ncol(mtx)
+
   nFeatures.wNAs <- nrow(mtx)
   mtx <- mtx[rowSums(is.na(mtx)) == 0, ]
   
@@ -215,26 +211,45 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
   }
   names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
   
-  c(nSamples = nSamples, nFeatures.wNAs = nFeatures.wNAs, nFeatures.woNAs = nFeatures.woNAs, 
-    minRowNonNaNumber = minRowNonNaNumber, maxRowNonNaNumber = maxRowNonNaNumber,
-    minRowNaPercentage = minRowNaPercentage, maxRowNaPercentage = maxRowNaPercentage, 
-    minColNaPercentage = minColNaPercentage, maxColNaPercentage = maxColNaPercentage,
-    corPval = corPval, corR = corR,
-    medianSampleVariance = medianSampleVariance, medianProteinVariance = medianProteinVariance, 
-    percNATotal = percNATotal, percOfRowsWithNAs = percOfRowsWithNAs, 
+  c(nFeatures.wNAs = nFeatures.wNAs, nFeatures.woNAs = nFeatures.woNAs, 
+    corColPval = corColPval, corColR = corColR,
+    corRowPval = corRowPval, corRowR = corRowR,
+    medianSampleVariance = medianSampleVariance, medianProteinVariance = medianProteinVariance,
     characts.wNAs, characts.woNAs)
 }
 
 
 getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
+  
+  mtx[mtx == 0] <- NA
+
+  nSamples <- ncol(mtx)
+  #colMedians <- colMedians(mtx, na.rm = TRUE)
+  colNaPercentage <- colMeans(is.na(mtx))*100
+  rowNaPercentage <- rowMeans(is.na(mtx))*100
+  minRowNonNaNumber <- min(rowSums(!is.na(mtx)))
+  maxRowNonNaNumber <- max(rowSums(!is.na(mtx)))
+  # numberMissingMatrix <- sum(is.na(mtx))
+  minRowNaPercentage <- min(rowNaPercentage)            
+  maxRowNaPercentage <- max(rowNaPercentage)
+  minColNaPercentage <- min(colNaPercentage)
+  maxColNaPercentage <- max(colNaPercentage)
+  
+  percNATotal <- mean(is.na(mtx)) * 100 
+  percOfRowsWithNAs <- sum(apply(mtx, 1, anyNA))/nrow(mtx) * 100
 
   charact.noLog <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = FALSE)
   names(charact.noLog) <- paste0(names(charact.noLog), ".noLog2")
   charact.log <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = TRUE)
   names(charact.log) <- paste0(names(charact.log), ".log2")
   
-  c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
-         c(charact.noLog, charact.log))
+  list(c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
+         c(nSamples = nSamples, 
+           percNATotal = percNATotal, percOfRowsWithNAs = percOfRowsWithNAs,
+           minRowNonNaNumber = minRowNonNaNumber, maxRowNonNaNumber = maxRowNonNaNumber,
+           minRowNaPercentage = minRowNaPercentage, maxRowNaPercentage = maxRowNaPercentage, 
+           minColNaPercentage = minColNaPercentage, maxColNaPercentage = maxColNaPercentage,
+           charact.noLog, charact.log)))
   
   # list(c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
   #        c(nSamples = nSamples, nFeatures.wNAs = nFeatures.wNAs, nFeatures.woNAs = nFeatures.woNAs, 
@@ -317,9 +332,11 @@ readInAllMetabolightsFiles <- function(dataTypePath, lst = list(), zerosToNA = F
       print(file)
       try({
         mtx <- readInMetabolightsFiles(filePath = file, zerosToNA = zerosToNA)
-        if (nrow(mtx) != 0) lst <- append(lst, getDataCharacteristics(mtx=mtx, 
-                                                  datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", basename(file))), 
-                                                  dataType=dataTypePath))
+        if (!is.vector(mtx)) {
+          if (nrow(mtx) != 0) lst <- append(lst, getDataCharacteristics(mtx=mtx, 
+                                                                        datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", basename(file))), 
+                                                                        dataType=dataTypePath))
+        }
       })
     }
   }
@@ -363,7 +380,7 @@ readInAllDataTypeFiles <- function(dataTypePath, rowLabelCol, colsToRemove, zero
                         alternativeRowLabelCol = alternativeRowLabelCol)
       # Only keep datasets with two dimensions
       if (!is.vector(mtx)) {
-        lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
+        if (nrow(mtx) != 0)  lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
       }
     })
   } 
@@ -477,11 +494,15 @@ getDataCharacteristicsForDataType <- function(dataType) {
           mtx <- readInMaxQuantFiles(filePath = dataTypeFilePath, 
                                      quantColPattern = quantColPattern,
                                      zerosToNA = FALSE)
-          lst <- append(lst, 
-                        getDataCharacteristics(
-                          mtx=mtx, 
-                          datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", quantColPattern)), 
-                          dataType=dataTypePath))
+          if (!is.vector(mtx)) {
+            if (nrow(mtx) != 0)  {
+              lst <- append(lst, 
+                            getDataCharacteristics(
+                              mtx=mtx, 
+                              datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", quantColPattern)), 
+                              dataType=dataTypePath))
+            }
+          }
         })
       }
     }
@@ -498,11 +519,16 @@ getDataCharacteristicsForDataType <- function(dataType) {
               mtx <- readInMaxQuantFiles(filePath = file,
                                          quantColPattern = quantColPattern,
                                          zerosToNA = FALSE)
-              lst <- append(lst, 
-                            getDataCharacteristics(
-                              mtx=mtx, 
-                              datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", basename(file), "_", quantColPattern)), 
-                              dataType=dataTypePath))
+              
+              if (!is.vector(mtx)) {
+                if (nrow(mtx) != 0)  {
+                  lst <- append(lst, 
+                                getDataCharacteristics(
+                                  mtx=mtx, 
+                                  datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", basename(file), "_", quantColPattern)), 
+                                  dataType=dataTypePath))
+                }
+              }
             })
           }
         }
@@ -518,7 +544,9 @@ getDataCharacteristicsForDataType <- function(dataType) {
       # library(Matrix)
       mtx <- Matrix::readMM(dataTypeFilePath)
       mtx <- as.matrix(mtx)
-      lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
+      if (!is.vector(mtx)) {
+        if (nrow(mtx) != 0) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
+      }
     }
   } 
   
@@ -531,7 +559,7 @@ getDataCharacteristicsForDataType <- function(dataType) {
   sink()
 }
 
-dataTypes <- c("metabolomics_MS", "metabolomics_NMR",
+dataTypes <- c("metabolomics_NMR", "metabolomics_MS", 
                "proteomics_expressionatlas", "proteomics_pride",
                "microbiome",
                "sc_normalized", "sc_unnormalized",
