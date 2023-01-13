@@ -97,26 +97,6 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
   variance <- calc_variance(mtx)
   RMS <- calc_RMS(mtx)
   
-  colNaPercentage <- colMeans(is.na(mtx))*100
-  colMeans <- colMeans(mtx, na.rm = TRUE)
-  
-  rowNaPercentage <- rowMeans(is.na(mtx))*100
-  rowMeans <- rowMeans(mtx, na.rm = TRUE)
-  
-  corColPval <- corRowPval <- corColR <- corRowR <- NA
-  corCoefType <- "spearman"
-  try({
-    cortestCol <- cor.test(colNaPercentage, colMeans, method = corCoefType)
-    corColPval <- cortestCol$p.value
-    corColR <- unname(cortestCol$estimate)
-  })
-  
-  try({
-    cortestRow <- cor.test(rowNaPercentage, rowMeans, method = corCoefType)
-    corRowPval <- cortestRow$p.value
-    corRowR <- unname(cortestRow$estimate)
-  })
-  
   # group.size <- ncol(mtx)/2
   
   # var.groups.ratio <- median(matrixStats::rowVars(mtx[, 1:group.size], na.rm = TRUE)/matrixStats::rowVars(mtx[, (group.size+1):ncol(mtx)], na.rm = TRUE), na.rm = TRUE)
@@ -147,11 +127,6 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
     uniformity = uniformity,
     variance = variance, 
     RMS = RMS,
-    corColPval = corColPval,
-    corColR = corColR,
-    corRowPval = corRowPval,
-    corRowR = corRowR,
-    #var.groups.ratio = var.groups.ratio,
     prctPC1 = prctPC1, 
     prctPC2 = prctPC2)
   return(resultvec)
@@ -162,6 +137,7 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
 
   if (takeLog2) mtx <- log2(mtx)
   
+  naFeatures <- getNaFeatures(mtx)
   # if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
 
 
@@ -172,13 +148,20 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
   characts.wNAs <- getCharacteristicsHelper(mtx, withNAs=TRUE)
   names(characts.wNAs) <- paste0(names(characts.wNAs), ".wNAs")
 
+  # Remove rows with NAs
   mtx <- mtx[rowSums(is.na(mtx)) == 0, ]
+  
+  if (is.vector(mtx)){
+    nFeatures.woNAs <- 1
+  } else {
+    nFeatures.woNAs <- nrow(mtx) # number of proteins with no NAs
+  }
   
   runCalculation <- TRUE
   if (is.vector(mtx) & length(mtx)>1){
     runCalculation <- FALSE
   } else {
-    if (!is.vector(mtx) & nrow == 0){
+    if (!is.vector(mtx) &  nFeatures.woNAs == 0){
       runCalculation <- FALSE
     } 
   }
@@ -200,23 +183,39 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
       uniformity = NA,
       variance = NA, 
       RMS = NA,
-      corColPval = NA,
-      corColR = NA,
-      corRowPval = NA,
-      corRowR = NA,
       prctPC1 = NA, 
       prctPC2 = NA)
   }
   
   names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
   
-  c(characts.wNAs, characts.woNAs)
+  c(naFeatures, characts.wNAs, characts.woNAs)
 }
 
 getNaFeatures <- function(mtx) {
   colNaPercentage <- colMeans(is.na(mtx))*100
   rowNaPercentage <- rowMeans(is.na(mtx))*100
   rowNonNaNumber <- rowSums(!is.na(mtx))
+  
+  colNaPercentage <- colMeans(is.na(mtx))*100
+  colMeans <- colMeans(mtx, na.rm = TRUE)
+  
+  rowNaPercentage <- rowMeans(is.na(mtx))*100
+  rowMeans <- rowMeans(mtx, na.rm = TRUE)
+  
+  corColPval <- corRowPval <- corColR <- corRowR <- NA
+  corCoefType <- "spearman"
+  try({
+    cortestCol <- cor.test(colNaPercentage, colMeans, method = corCoefType)
+    corColPval <- cortestCol$p.value
+    corColR <- unname(cortestCol$estimate)
+  })
+  
+  try({
+    cortestRow <- cor.test(rowNaPercentage, rowMeans, method = corCoefType)
+    corRowPval <- cortestRow$p.value
+    corRowR <- unname(cortestRow$estimate)
+  })
 
   c(
     minRowNonNaNumber = min(rowNonNaNumber),
@@ -226,7 +225,11 @@ getNaFeatures <- function(mtx) {
     minColNaPercentage = min(colNaPercentage),
     maxColNaPercentage = max(colNaPercentage),
     percNATotal = mean(is.na(mtx)) * 100,
-    percOfRowsWithNAs = sum(apply(mtx, 1, anyNA))/nrow(mtx) * 100
+    percOfRowsWithNAs = sum(apply(mtx, 1, anyNA))/nrow(mtx) * 100,
+    corColPval = corColPval,
+    corColR = corColR,
+    corRowPval = corRowPval,
+    corRowR = corRowR
   )
 }
 
@@ -236,7 +239,6 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
 
   nSamples <- ncol(mtx)
-  naFeatures <- getNaFeatures(mtx) 
   
   charact.noLog <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = FALSE)
   names(charact.noLog) <- paste0(names(charact.noLog), ".noLog2")
@@ -245,7 +247,6 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   
   list(c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
          c(nSamples = nSamples, 
-           naFeatures,
            charact.noLog, charact.log)))
 }
 ################################################################################
