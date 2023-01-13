@@ -213,13 +213,14 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
   c(characts.wNAs, characts.woNAs)
 }
 
-
 getNaFeatures <- function(mtx) {
+  colNaPercentage <- colMeans(is.na(mtx))*100
+  rowNaPercentage <- rowMeans(is.na(mtx))*100
+  rowNonNaNumber <- rowSums(!is.na(mtx))
+
   c(
-    colNaPercentage = colMeans(is.na(mtx))*100,
-    rowNaPercentage = rowMeans(is.na(mtx))*100,
-    minRowNonNaNumber = min(rowSums(!is.na(mtx))),
-    maxRowNonNaNumber = max(rowSums(!is.na(mtx))),
+    minRowNonNaNumber = min(rowNonNaNumber),
+    maxRowNonNaNumber = max(rowNonNaNumber),
     minRowNaPercentage = min(rowNaPercentage),            
     maxRowNaPercentage = max(rowNaPercentage),
     minColNaPercentage = min(colNaPercentage),
@@ -227,8 +228,8 @@ getNaFeatures <- function(mtx) {
     percNATotal = mean(is.na(mtx)) * 100,
     percOfRowsWithNAs = sum(apply(mtx, 1, anyNA))/nrow(mtx) * 100
   )
-  
 }
+
 getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   
   mtx[mtx == 0] <- NA
