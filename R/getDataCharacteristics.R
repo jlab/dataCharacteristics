@@ -72,7 +72,7 @@ calc_uniformity <- function(data, nbins=length(unique(c(data)))){
 calc_variance <- function(data) var(c(data), na.rm=TRUE)
 calc_RMS <- function(data) sqrt(mean(data^2, na.rm=TRUE))
 
-getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
+getCharacteristicsHelper <- function(mtx, withNAs=TRUE, fast = TRUE){
   #KS.SignProp <- kolSmirTestSignProp(mtx)
   
   if (is.vector(mtx)){
@@ -87,15 +87,19 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
   max <- max(mtx, na.rm = TRUE)
   
   medianSampleVariance <- median(apply(mtx, 2, var,  na.rm=TRUE), na.rm = TRUE)
-  medianProteinVariance <- median(unname(apply(mtx, 1, var,  na.rm=TRUE)), na.rm = TRUE)
+  medianAnalyteVariance <- median(unname(apply(mtx, 1, var,  na.rm=TRUE)), na.rm = TRUE)
   
-  entropy <- calc_entropy(mtx) #
-  kurtosis <- calc_kurtosis(mtx)
-  meanDeviation <- calc_meanDeviation(mtx)
   skewness <- calc_skewness(mtx)
-  uniformity <- calc_uniformity(mtx) #
+  kurtosis <- calc_kurtosis(mtx)
+  
+  if (!fast){
+    entropy <- calc_entropy(mtx) #
+    meanDeviation <- calc_meanDeviation(mtx)
+    uniformity <- calc_uniformity(mtx) #
+    RMS <- calc_RMS(mtx)
+  }
+
   variance <- calc_variance(mtx)
-  RMS <- calc_RMS(mtx)
   
   # group.size <- ncol(mtx)/2
   
@@ -119,21 +123,27 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE){
     min = min,
     max = max,
     medianSampleVariance = medianSampleVariance,
-    medianProteinVariance = medianProteinVariance,
-    entropy = entropy,
-    kurtosis = kurtosis, 
-    meanDeviation = meanDeviation,
-    skewness = skewness,
-    uniformity = uniformity,
+    medianAnalyteVariance = medianAnalyteVariance,
     variance = variance, 
-    RMS = RMS,
+    kurtosis = kurtosis,
+    skewness = skewness,
     prctPC1 = prctPC1, 
     prctPC2 = prctPC2)
+  
+  if (!fast){
+    resultvec <- c(resultvec, 
+                   entropy = entropy,
+                   meanDeviation = meanDeviation,
+                   uniformity = uniformity,
+                   RMS = RMS)
+    
+  }
+
   return(resultvec)
 }
 
 
-getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
+getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
 
   if (takeLog2) mtx <- log2(mtx)
   
@@ -145,51 +155,52 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE) {
   # Compare correlation when taking "Intensity " and "LFQ " columns for PXD020490/proteinGroups.txt
   #KS.SignProp <- kolSmirTestSignProp(as.matrix(df))
 
-  characts.wNAs <- getCharacteristicsHelper(mtx, withNAs=TRUE)
+  characts.wNAs <- getCharacteristicsHelper(mtx, withNAs=TRUE, fast = fast)
   names(characts.wNAs) <- paste0(names(characts.wNAs), ".wNAs")
 
-  # Remove rows with NAs
-  mtx <- mtx[rowSums(is.na(mtx)) == 0, ]
+#   # Remove rows with NAs
+#   mtx <- mtx[rowSums(is.na(mtx)) == 0, ]
+#   
+#   if (is.vector(mtx)){
+#     nFeatures.woNAs <- 1
+#   } else {
+#     nFeatures.woNAs <- nrow(mtx) # number of proteins with no NAs
+#   }
+#   
+#   runCalculation <- TRUE
+#   if (is.vector(mtx) & length(mtx)>1){
+#     runCalculation <- FALSE
+#   } else {
+#     if (!is.vector(mtx) &  nFeatures.woNAs == 0){
+#       runCalculation <- FALSE
+#     } 
+#   }
+#   
+#   if (runCalculation) {
+#     characts.woNAs <- getCharacteristicsHelper(mtx, withNAs=FALSE)
+#   } else {
+#     characts.woNAs <- c(
+#       mean = NA,
+#       median = NA,
+#       min = NA,
+#       max = NA,
+#       medianSampleVariance = NA,
+#       medianAnalyteVariance = NA,
+#       entropy = NA,
+#       kurtosis = NA, 
+#       meanDeviation = NA,
+#       skewness = NA,
+#       uniformity = NA,
+#       variance = NA, 
+#       RMS = NA,
+#       prctPC1 = NA, 
+#       prctPC2 = NA)
+#   }
+#   
+#   names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
   
-  if (is.vector(mtx)){
-    nFeatures.woNAs <- 1
-  } else {
-    nFeatures.woNAs <- nrow(mtx) # number of proteins with no NAs
-  }
-  
-  runCalculation <- TRUE
-  if (is.vector(mtx) & length(mtx)>1){
-    runCalculation <- FALSE
-  } else {
-    if (!is.vector(mtx) &  nFeatures.woNAs == 0){
-      runCalculation <- FALSE
-    } 
-  }
-  
-  if (runCalculation) {
-    characts.woNAs <- getCharacteristicsHelper(mtx, withNAs=FALSE)
-  } else {
-    characts.woNAs <- c(
-      mean = NA,
-      median = NA,
-      min = NA,
-      max = NA,
-      medianSampleVariance = NA,
-      medianProteinVariance = NA,
-      entropy = NA,
-      kurtosis = NA, 
-      meanDeviation = NA,
-      skewness = NA,
-      uniformity = NA,
-      variance = NA, 
-      RMS = NA,
-      prctPC1 = NA, 
-      prctPC2 = NA)
-  }
-  
-  names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
-  
-  c(naFeatures, characts.wNAs, characts.woNAs)
+  # c(naFeatures, characts.wNAs, characts.woNAs)
+  c(naFeatures, characts.wNAs)
 }
 
 getNaFeatures <- function(mtx) {
@@ -239,15 +250,18 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
 
   nSamples <- ncol(mtx)
+  nAnalytes <- nrow(mtx)
   
-  charact.noLog <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = FALSE)
-  names(charact.noLog) <- paste0(names(charact.noLog), ".noLog2")
+  # charact.noLog <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = FALSE)
+  # names(charact.noLog) <- paste0(names(charact.noLog), ".noLog2")
   charact.log <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = TRUE)
   names(charact.log) <- paste0(names(charact.log), ".log2")
   
   list(c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
          c(nSamples = nSamples, 
-           charact.noLog, charact.log)))
+           nAnalytes = nAnalytes,
+           # charact.noLog, 
+           charact.log)))
 }
 ################################################################################
 
@@ -554,9 +568,9 @@ dataTypes <- c("metabolomics_NMR", "metabolomics_MS",
                "microbiome",
                "RNAseq_fpkms_median",
                "RNAseq_raw", "RNAseq_raw_undecorated", "RNAseq_tpms_median",
-               "RNAseq_transcripts_raw_undecorated", "RNAseq_transcripts_tpms",
                "microarray",
-               "sc_normalized", "sc_unnormalized")
+               "sc_normalized", "sc_unnormalized",
+               "RNAseq_transcripts_tpms", "RNAseq_transcripts_raw_undecorated")
 
 # path <- "exampleFiles/"
 #path <- "./"
