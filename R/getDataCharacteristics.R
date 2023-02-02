@@ -69,7 +69,11 @@ calc_uniformity <- function(data, nbins=length(unique(c(data)))){
   return(sum(function_vals))
 }
 
-calc_variance <- function(data) var(c(data), na.rm=TRUE)
+calc_variance <- function(data){
+  # var(c(data), na.rm=TRUE) # was replaced because for single cell data large vectors can become a problem
+  1/(sum(!is.na(data))-1)*sum((data-mean(data, na.rm = TRUE))^2, na.rm = TRUE) 
+}
+  
 calc_RMS <- function(data) sqrt(mean(data^2, na.rm=TRUE))
 
 getCharacteristicsHelper <- function(mtx, withNAs=TRUE, fast = TRUE){
