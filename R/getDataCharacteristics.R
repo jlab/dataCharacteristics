@@ -313,12 +313,13 @@ readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
   dat <- dat[,colnames(dat) %notin% remove]
 
   mtx <- as.matrix(dat)
-  dat <- NULL
   
   try({
     if(sum(dat$metabolite_identification != "") == nrow(dat)) 
       row.names(mtx) <- make.names(dat$metabolite_identification, unique=TRUE)
   })
+  
+  dat <- NULL
   
   mtx[mtx == "BLQ"] <- 0
   if (zerosToNA) mtx[mtx == 0] <- NA
