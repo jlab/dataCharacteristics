@@ -110,6 +110,7 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE, fast = TRUE){
   # var.groups.ratio <- median(matrixStats::rowVars(mtx[, 1:group.size], na.rm = TRUE)/matrixStats::rowVars(mtx[, (group.size+1):ncol(mtx)], na.rm = TRUE), na.rm = TRUE)
   
   t.mtx <- t(mtx)
+  mtx <- NULL
   t.mtx <- t.mtx[ , which(apply(t.mtx, 2, var, na.rm = TRUE) != 0)] # Remove zero variance columns 
 
   prctPC1 <- prctPC2 <- NA
@@ -309,9 +310,10 @@ readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
     "KEGG_database_identifier"
     )
   
-  dat2 <- dat[,colnames(dat) %notin% remove]
+  dat <- dat[,colnames(dat) %notin% remove]
 
-  mtx <- as.matrix(dat2)
+  mtx <- as.matrix(dat)
+  dat <- NULL
   
   try({
     if(sum(dat$metabolite_identification != "") == nrow(dat)) 
@@ -365,6 +367,8 @@ readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FA
     
   dat <- data.frame(dat[, setdiff(colnames(dat), colsToRemove)])
   mtx <- as.matrix(dat)
+  dat <- NULL
+  
   row.names(mtx) <- make.names(geneId, unique=TRUE)
   
   if (zerosToNA) mtx[mtx == 0] <- NA
