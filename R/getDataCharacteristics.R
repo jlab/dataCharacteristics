@@ -5,6 +5,7 @@
 library(data.table)
 library(pcaMethods)
 library(Matrix)
+library(dplyr)
 # library(foreach)
 
 `%notin%` <- Negate(`%in%`)
@@ -109,14 +110,13 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE, fast = TRUE){
   
   # var.groups.ratio <- median(matrixStats::rowVars(mtx[, 1:group.size], na.rm = TRUE)/matrixStats::rowVars(mtx[, (group.size+1):ncol(mtx)], na.rm = TRUE), na.rm = TRUE)
   
-  t.mtx <- t(mtx)
-  mtx <- NULL
-  t.mtx <- t.mtx[ , which(apply(t.mtx, 2, var, na.rm = TRUE) != 0)] # Remove zero variance columns 
+  mtx <- mtx %>% t()
+  mtx <- mtx[ , which(apply(mtx, 2, var, na.rm = TRUE) != 0)] # Remove zero variance columns 
 
   prctPC1 <- prctPC2 <- NA
-  if (!is.vector(t.mtx)){
+  if (!is.vector(mtx)){
     try({
-      pca <- pcaMethods::pca(t.mtx, method="nipals", center = TRUE, maxSteps=5000)
+      pca <- pcaMethods::pca(mtx, method="nipals", center = TRUE, maxSteps=5000)
       prctPC1 <- pca@R2[1]
       prctPC2 <- pca@R2[2]
     })
