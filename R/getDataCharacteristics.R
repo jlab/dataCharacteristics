@@ -252,6 +252,7 @@ getNaFeatures <- function(mtx) {
 getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   
   mtx[mtx == 0] <- NA
+  mtx[mtx == Inf] <- NA
   mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
 
   nSamples <- ncol(mtx)
@@ -572,14 +573,18 @@ getDataCharacteristicsForDataType <- function(dataType) {
   sink()
 }
 
-dataTypes <- c("metabolomics_NMR", "metabolomics_MS", 
-               "proteomics_expressionatlas", "proteomics_pride",
-               "microbiome",
-               "RNAseq_fpkms_median",
-               "RNAseq_raw", "RNAseq_raw_undecorated", "RNAseq_tpms_median",
-               "microarray",
-               "sc_normalized", "sc_unnormalized",
-               "RNAseq_transcripts_tpms", "RNAseq_transcripts_raw_undecorated")
+dataTypes <- c(
+  "metabolomics_NMR", "metabolomics_MS", 
+  "proteomics_expressionatlas", "proteomics_pride",
+  "microbiome",
+  "RNAseq_fpkms_median",
+  "RNAseq_raw", "RNAseq_raw_undecorated", "RNAseq_tpms_median",
+  "RNAseq_transcripts_tpms",
+  "microarray",
+  "sc_unnormalized",
+  "RNAseq_transcripts_raw_undecorated",
+  "sc_normalized"
+)
 
 # path <- "exampleFiles/"
 #path <- "./"
