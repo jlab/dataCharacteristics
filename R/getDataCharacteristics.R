@@ -580,12 +580,12 @@ dataTypes <- c(
   "metabolomics_NMR", "metabolomics_MS", 
   "proteomics_expressionatlas", "proteomics_pride",
   "microbiome",
-  "RNAseq_fpkms_median",
-  "RNAseq_raw", "RNAseq_raw_undecorated", "RNAseq_tpms_median",
-  "RNAseq_transcripts_tpms",
+  "RNAseq_fpkms_median", "RNAseq_tpms_median",
+  "RNAseq_raw", "RNAseq_raw_undecorated", 
+  # "RNAseq_transcripts_tpms",
+  # "RNAseq_transcripts_raw_undecorated",
   "microarray",
   "sc_unnormalized",
-  "RNAseq_transcripts_raw_undecorated",
   "sc_normalized"
 )
 
