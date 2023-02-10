@@ -273,7 +273,9 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
 
 readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
   #dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
-  dat <- data.frame(data.table::fread(filePath, check.names = FALSE, sep = "\t"), check.names = FALSE)
+  dat <- data.frame(data.table::fread(filePath, check.names = FALSE, sep = "\t"), 
+                    check.names = FALSE, 
+                    integer64 = "numeric")
   
   remove <- c(
     "database_identifier",
@@ -312,7 +314,6 @@ readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
     )
   
   dat <- dat[,colnames(dat) %notin% remove]
-
   mtx <- as.matrix(dat)
   
   try({
@@ -357,7 +358,9 @@ readInAllMetabolightsFiles <- function(dataTypePath, lst = list(), zerosToNA = F
 
 readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FALSE, alternativeRowLabelCol = "") {
   #dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
-  dat <- data.frame(data.table::fread(filePath, check.names = FALSE, sep = "\t"), check.names = FALSE)
+  dat <- data.frame(data.table::fread(filePath, check.names = FALSE, sep = "\t"), 
+                    check.names = FALSE,
+                    integer64 = "numeric")
   
   if (is.character(rowLabelCol)){
     geneId <- dat[[rowLabelCol]]
