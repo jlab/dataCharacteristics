@@ -381,7 +381,7 @@ readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FA
   mtx <- as.matrix(dat)
   dat <- NULL
   
-  row.names(mtx) <- make.names(geneId, unique=TRUE)
+  row.names(mtx) <- make.names(unlist(geneId), unique=TRUE)
   
   if (zerosToNA) mtx[mtx == 0] <- NA
   mtx[mtx == "NaN"] <- NA
