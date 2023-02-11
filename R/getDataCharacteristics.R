@@ -6,7 +6,6 @@ library(data.table)
 library(pcaMethods)
 library(Matrix)
 library(dplyr)
-library(vroom)
 # library(foreach)
 
 `%notin%` <- Negate(`%in%`)
@@ -273,13 +272,11 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
 ################################################################################
 
 readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
-  #dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
+  dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
   
   # dat <- data.frame(data.table::fread(filePath, check.names = FALSE, sep = "\t", 
   #                                     integer64 = "character"), 
   #                   check.names = FALSE)
-  
-  dat <- vroom::vroom(filePath, delim = "\t", show_col_types = FALSE)
   
   remove <- c(
     "database_identifier",
@@ -362,12 +359,11 @@ readInAllMetabolightsFiles <- function(dataTypePath, lst = list(), zerosToNA = F
 }
 
 readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FALSE, alternativeRowLabelCol = "") {
-  #dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
+  dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
+  
   # dat <- data.frame(data.table::fread(filePath, check.names = FALSE, sep = "\t",
   #                                     integer64 = "numeric"), 
   #                   check.names = FALSE)
-  
-  dat <- vroom::vroom(filePath, delim = "\t", show_col_types = FALSE)
   
   if (is.character(rowLabelCol)){
     geneId <- dat[[rowLabelCol]]
