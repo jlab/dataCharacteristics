@@ -87,6 +87,8 @@ dataset <- ldply(list.files("results", pattern = ".csv", full.names = TRUE), rea
 #dataset <- plyr::ldply(list.files(pattern = ".csv", full.names = TRUE), read.csv, header=TRUE)
 
 names(dataset) <- gsub(x = names(dataset), pattern = "\\.log2|\\.wNAs", replacement = "")  
+names(dataset)[names(dataset) == 'corColR'] <- 'corSampleMeanNA'
+names(dataset)[names(dataset) == 'corRowR'] <- 'corAnalyteMeanNA'
 
 dataset <- dataset %>% 
   mutate(dataType2 = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
@@ -252,7 +254,7 @@ plotData <- function(df, groupColName = "", addStr = "") {
 }
 
 
-margPlot <- ggplot(data, aes(x = corColR, y = corRowR, colour = dataType4)) +
+margPlot <- ggplot(data, aes(x = corSampleMeanNA, y = corAnalyteMeanNA, colour = dataType4)) +
   geom_point(aes(fill = dataType4),  size = 0.8, alpha = 0.5) +
   theme_minimal()
 
@@ -270,7 +272,7 @@ dev.off()
 data2 <- data[, c("dataType4", 
                   "nSamples", 
                   "nAnalytes", 
-                  "percNATotal", "corColR", "corRowR",  "median", 
+                  "percNATotal", "corSampleMeanNA", "corAnalyteMeanNA",  "median", 
                   "medianSampleVariance", "medianAnalyteVariance", "skewness", "prctPC1", "prctPC2")]
 
 plotData(df = data2, groupColName = "dataType4", addStr = "")
