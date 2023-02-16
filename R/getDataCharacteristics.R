@@ -151,6 +151,7 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE, fast = TRUE){
 getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
 
   if (takeLog2) mtx <- log2(mtx)
+  mtx[mtx == "NaN"] <- NA
   
   naFeatures <- getNaFeatures(mtx)
   # if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
@@ -412,7 +413,16 @@ readInMaxQuantFiles <- function (filePath, quantColPattern = c("^LFQ ", "^iBAQ "
                   sep = "\t")
   
   # mtx <- as.matrix(dat[, grepl("^LFQ ", names(dat))])
-  mtx <- as.matrix(dat[, grepl(quantColPattern, names(dat))])
+  
+  if (quantColPattern == "^iBAQ "){
+    # Because of PXD003834/proteinGroups_IF_151005_Volcanoplot_iBAQ_modSEENOTE_151022.txt
+    cols.selected <- grepl(quantColPattern, names(dat)) & 
+      !grepl("^iBAQ p value ", names(dat)) &
+      !grepl("^iBAQ log2 ", names(dat))
+  } else {
+    cols.selected <- grepl(quantColPattern, names(dat))
+  }
+  mtx <- as.matrix(dat[, cols.selected])
   
   if (zerosToNA) mtx[mtx == 0] <- NA
   mtx[mtx == "NaN"] <- NA
