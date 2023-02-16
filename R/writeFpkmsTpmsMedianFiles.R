@@ -1,10 +1,10 @@
-#  From 5-number summary (min, lower quartile, mean, higher quartile, max) get
-# the third value corresponding to mean value
+#  From 5-number summary (min, lower quartile, median, higher quartile, max) get
+# the third value corresponding to median value
 getThirdNumber <- function(str1){
   as.numeric(unlist(strsplit(str1, ",")))[3]
 }
 
-writeMeanRNAseqFpkmsTpmsFiles <- function(filePath, rowLabelCol, colsToRemove, zerosToNA = FALSE) {
+writeMedianRNAseqFpkmsTpmsFiles <- function(filePath, rowLabelCol, colsToRemove, zerosToNA = FALSE) {
   print(filePath)
   dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
   geneId <- dat[[rowLabelCol]]
@@ -17,7 +17,7 @@ writeMeanRNAseqFpkmsTpmsFiles <- function(filePath, rowLabelCol, colsToRemove, z
   geneId <- row.names(dat)
   dat.lst <- as.list(dat)
   
-  # Take third value (= mean of 5-number summary) of the comma separated numbers in each cell
+  # Take third value (= median of 5-number summary) of the comma separated numbers in each cell
   # The same seems to have been done to get the values in the FPKM file on the 
   # Downloads tab of the ExpressionAtlas website 
   # (see e.g. https://www.ebi.ac.uk/gxa/experiments/E-MTAB-2812/Downloads)
@@ -35,26 +35,26 @@ writeMeanRNAseqFpkmsTpmsFiles <- function(filePath, rowLabelCol, colsToRemove, z
   
   mtx <- subset(mtx, rowSums(is.na(mtx)) != ncol(mtx))
   
-  fileName <- paste0(sub('\\.tsv$', '', basename(filePath)), "_mean.tsv")
+  fileName <- paste0(sub('\\.tsv$', '', basename(filePath)), "_median.tsv")
   write.table(mtx, file = fileName, sep = "\t", col.names=NA)
 }
 
-writeMeanFiles <- function(dataTypePath, rowLabelCol, colsToRemove) {
+writeMedianFiles <- function(dataTypePath, rowLabelCol, colsToRemove) {
   dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
   dataTypeFilePaths <- dataTypeFilePaths[!grepl("\\.txt$", dataTypeFilePaths)]
   
   for (dataTypeFilePath in dataTypeFilePaths){
-    writeMeanRNAseqFpkmsTpmsFiles(filePath = dataTypeFilePath,
+    writeMedianRNAseqFpkmsTpmsFiles(filePath = dataTypeFilePath,
                                            rowLabelCol = rowLabelCol,
                                            colsToRemove = colsToRemove,
                                            zerosToNA = FALSE)
   }
 }
 
-writeMeanFiles(dataTypePath = "RNAseq_fpkms", rowLabelCol = "GeneID", colsToRemove = c("GeneID", "Gene Name")) 
-writeMeanFiles(dataTypePath = "RNAseq_tpms", rowLabelCol = "GeneID", colsToRemove = c("GeneID", "Gene Name")) 
+writeMedianFiles(dataTypePath = "RNAseq_fpkms", rowLabelCol = "GeneID", colsToRemove = c("GeneID", "Gene Name")) 
+writeMedianFiles(dataTypePath = "RNAseq_tpms", rowLabelCol = "GeneID", colsToRemove = c("GeneID", "Gene Name")) 
 
 session <- sessionInfo()
-sink("writeFpkmsTpmsMeanFiles_sessionInfo.txt")
+sink("writeFpkmsTpmsMedianFiles_sessionInfo.txt")
 print(session)
 sink()

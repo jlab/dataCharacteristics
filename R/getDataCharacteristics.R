@@ -510,7 +510,7 @@ getDataCharacteristicsForDataType <- function(dataType) {
                                   rowLabelCol = "GeneID", 
                                   colsToRemove = c("Gene ID", "Gene Name", "GeneID"),
                                   lst = lst)
-  } else if (dataType %in% c("RNAseq_fpkms_mean", "RNAseq_tpms_mean", "microbiome")){
+  } else if (dataType %in% c("RNAseq_fpkms_median", "RNAseq_tpms_median", "microbiome")){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = 1, 
                                   colsToRemove = c(),
@@ -593,7 +593,7 @@ dataTypes <- c(
   "metabolomics_NMR", "metabolomics_MS", 
   "proteomics_expressionatlas", "proteomics_pride",
   "microbiome",
-  "RNAseq_fpkms_mean", "RNAseq_tpms_mean",
+  "RNAseq_fpkms_median", "RNAseq_tpms_median",
   "RNAseq_raw", "RNAseq_raw_undecorated", 
   # "RNAseq_transcripts_tpms",
   # "RNAseq_transcripts_raw_undecorated",
