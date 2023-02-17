@@ -238,11 +238,21 @@ data2$medianAnalyteVariance.Log2 <- log2(data2$medianAnalyteVariance)
 data2[sapply(data2, is.infinite)] <- NA
 data2.long <- reshape2::melt(data2)
 
+# For each data characteristic: Median of the median of each data type
+medianValues <- data2.long %>%
+  group_by(get(selectedDataTypeCol), variable) %>%  
+  summarise(medianValue = median(value, na.rm=T)) %>%
+  group_by(variable) %>%  
+  summarise(medianValue = median(medianValue, na.rm=T))
+
+write.csv(medianValues, "medianValues.csv", row.names = FALSE)
+
 ggplot.charact <- ggplot(data2.long, aes(forcats::fct_rev(get(selectedDataTypeCol)), value)) +
   geom_boxplot(aes(fill=get(selectedDataTypeCol)), alpha=0.5, outlier.size=0.5) +
   coord_flip() +
   xlab("") +
   ylab("") +
+  geom_hline(aes(yintercept = medianValue), medianValues, colour = 'red') +
   facet_wrap( ~ variable, scales = "free_x", ncol=3) +
   ggplot2::theme_bw() +
   theme(legend.title = element_blank(), axis.text.y = element_text(hjust=0), legend.position="bottom",
