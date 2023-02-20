@@ -10,6 +10,7 @@ theme_set(theme_bw())
 dataset <- ldply(list.files("results", pattern = ".csv", full.names = TRUE), read.csv, header=TRUE)
 #dataset <- plyr::ldply(list.files(pattern = ".csv", full.names = TRUE), read.csv, header=TRUE)
 dataset <- dataset[dataset$nSamples>0,]
+dataset <- dataset[dataset$variance>0,]
 names(dataset) <- gsub(x = names(dataset), pattern = "\\.log2|\\.wNAs", replacement = "")  
 names(dataset)[names(dataset) == 'corColR'] <- 'corSampleMeanNA'
 names(dataset)[names(dataset) == 'corRowR'] <- 'corAnalyteMeanNA'
@@ -231,12 +232,25 @@ data2 <- data[, c(selectedDataTypeCol,
 
 plotData(df = data2, groupColName = selectedDataTypeCol, addStr = "")
 
-data2$nSamples.Log2 <- log2(data2$nSamples)
-data2$nAnalytes.Log2 <- log2(data2$nAnalytes)
-data2$medianSampleVariance.Log2 <- log2(data2$medianSampleVariance)
-data2$medianAnalyteVariance.Log2 <- log2(data2$medianAnalyteVariance)
+data2$`log2(nSamples)` <- log2(data2$nSamples)
+data2$`log2(nAnalytes)` <- log2(data2$nAnalytes)
+data2$`log2(medianSampleVariance)` <- log2(data2$medianSampleVariance)
+data2$`log2(medianAnalyteVariance)` <- log2(data2$medianAnalyteVariance)
 data2[sapply(data2, is.infinite)] <- NA
+
+data2 <- data2[ , !names(data2) %in% 
+      c("nSamples", "nAnalytes", "medianSampleVariance", "medianAnalyteVariance")]
+
+# dput(names(data2))
+
 data2.long <- reshape2::melt(data2)
+neworder <- c("dataType5", 
+              "log2(nSamples)", "log2(nAnalytes)", 
+              "log2(medianSampleVariance)", "log2(medianAnalyteVariance)",
+              "median", "skewness", "prctPC1", "prctPC2",
+              "corSampleMeanNA", "corAnalyteMeanNA", "percNATotal")
+data2.long <- dplyr::arrange(dplyr::mutate(data2.long,
+                                           variable=factor(variable,levels=neworder)), variable)
 
 # For each data characteristic: Median of the median of each data type
 medianValues <- data2.long %>%
@@ -253,10 +267,18 @@ ggplot.charact <- ggplot(data2.long, aes(forcats::fct_rev(get(selectedDataTypeCo
   xlab("") +
   ylab("") +
   geom_hline(aes(yintercept = medianValue), medianValues, colour = 'red') +
-  facet_wrap( ~ variable, scales = "free_x", ncol=3) +
+  facet_wrap( ~ variable, scales = "free_x", ncol=2, strip.position = "bottom") +
   ggplot2::theme_bw() +
-  theme(legend.title = element_blank(), axis.text.y = element_text(hjust=0), legend.position="bottom",
-        legend.justification = "left", legend.direction = "horizontal") +
+  #theme_minimal() + 
+  theme(panel.spacing.y=unit(1.5, "lines"),
+        legend.title = element_blank(), axis.text.y = element_text(hjust=0, face = "bold"), 
+        # legend.position="bottom",
+        legend.position = "none",
+        legend.justification = "left", legend.direction = "horizontal",
+        strip.text = element_text(face="bold"),
+        strip.placement = "outside",                      # Place facet labels outside x axis labels.
+        strip.background = element_blank(),  # Make facet label background white.
+        axis.title = element_blank()) +     
   guides(fill = guide_legend(reverse = TRUE))
 ggsave(file=paste0("boxplots.pdf"), ggplot.charact, height=15, width=12)
 
