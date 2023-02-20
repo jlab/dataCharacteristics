@@ -236,6 +236,9 @@ data2$`log2(nSamples)` <- log2(data2$nSamples)
 data2$`log2(nAnalytes)` <- log2(data2$nAnalytes)
 data2$`log2(medianSampleVariance)` <- log2(data2$medianSampleVariance)
 data2$`log2(medianAnalyteVariance)` <- log2(data2$medianAnalyteVariance)
+
+write.csv(data2, "data2.csv", row.names = FALSE)
+
 data2[sapply(data2, is.infinite)] <- NA
 
 data2 <- data2[ , !names(data2) %in% 
@@ -252,13 +255,20 @@ neworder <- c("dataType5",
 data2.long <- dplyr::arrange(dplyr::mutate(data2.long,
                                            variable=factor(variable,levels=neworder)), variable)
 
+
+numberOfDatasetsIncluded <- data2.long %>% 
+  na.omit() %>%
+  group_by(get(selectedDataTypeCol), variable) %>%  tally() %>%
+  ungroup()
+colnames(numberOfDatasetsIncluded) <- c(selectedDataTypeCol, "variable", "count")
+write.csv(numberOfDatasetsIncluded, "numberOfDatasetsIncluded.csv", row.names = FALSE)
+
 # For each data characteristic: Median of the median of each data type
 medianValues <- data2.long %>%
   group_by(get(selectedDataTypeCol), variable) %>%  
   summarise(medianValue = median(value, na.rm=T)) %>%
   group_by(variable) %>%  
   summarise(medianValue = median(medianValue, na.rm=T))
-
 write.csv(medianValues, "medianValues.csv", row.names = FALSE)
 
 ggplot.charact <- ggplot(data2.long, aes(forcats::fct_rev(get(selectedDataTypeCol)), value)) +
