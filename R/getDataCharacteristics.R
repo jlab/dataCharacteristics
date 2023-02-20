@@ -590,8 +590,6 @@ getDataCharacteristicsForDataType <- function(dataType) {
 }
 
 dataTypes <- c(
-  "sc_normalized",
-  "sc_unnormalized",
   "metabolomics_NMR", "metabolomics_MS", 
   "proteomics_expressionatlas", "proteomics_pride",
   "microbiome",
@@ -599,7 +597,9 @@ dataTypes <- c(
   "RNAseq_raw", "RNAseq_raw_undecorated", 
   # "RNAseq_transcripts_tpms",
   # "RNAseq_transcripts_raw_undecorated",
-  "microarray"
+  "microarray",
+  "sc_normalized",
+  "sc_unnormalized"
 )
 
 # path <- "exampleFiles/"
