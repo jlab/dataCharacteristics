@@ -94,7 +94,7 @@ plotNipalsBiplot <- function(df, groups= c(), alpha = 0.5) {
     scale_color_discrete(name = '') +  
     coord_fixed(ratio = 0.4) +
     #theme_bw() +
-    ggforce::facet_zoom(xlim = c(-3, 3), ylim = c(-3, 3))
+    ggforce::facet_zoom(xlim = c(-3, 4), ylim = c(-2.5, 6))
 
     P2 <- P2 + theme(legend.direction ='horizontal', 
                      legend.position = 'bottom')
