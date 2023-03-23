@@ -239,7 +239,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   # var.groups.ratio <- median(matrixStats::rowVars(mtx[, 1:group.size], na.rm = TRUE)/matrixStats::rowVars(mtx[, (group.size+1):ncol(mtx)], na.rm = TRUE), na.rm = TRUE)
   
-  prctPC1 <- prctPC2 <- bimodalityRowCorr <- bimodalityRowCorrSeed <- bimodalityColCorr <- 
+  prctPC1 <- prctPC2 <- bimodalityRowCorr <- bimodalityRowCorrSeed <- bimodalityColCorr <- bimodalityColCorrSeed <- 
     linearCoefPoly2Row <- quadraticCoefPoly2Row <- coefHclustRows <- coefHclustRowsSeed <- NA
   
   # bimodalIndex 
