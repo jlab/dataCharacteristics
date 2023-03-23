@@ -12,8 +12,8 @@ dataset <- ldply(list.files("results", pattern = ".csv", full.names = TRUE), rea
 dataset <- dataset[dataset$nSamples>0,]
 dataset <- dataset[dataset$variance>0,]
 names(dataset) <- gsub(x = names(dataset), pattern = "\\.log2|\\.wNAs", replacement = "")  
-names(dataset)[names(dataset) == 'corColR'] <- 'corSampleMeanNA'
-names(dataset)[names(dataset) == 'corRowR'] <- 'corAnalyteMeanNA'
+#names(dataset)[names(dataset) == 'corColR'] <- 'corSampleMeanNA'
+#names(dataset)[names(dataset) == 'corRowR'] <- 'corAnalyteMeanNA'
 
 dataset <- dataset %>% 
   mutate(dataType2 = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),

@@ -7,6 +7,9 @@ library(pcaMethods)
 library(Matrix)
 library(dplyr)
 # library(foreach)
+library(BimodalIndex)
+library(cluster)
+library(amap)
 
 `%notin%` <- Negate(`%in%`)
 #################################################################################
@@ -77,7 +80,87 @@ calc_variance <- function(data){
   
 calc_RMS <- function(data) sqrt(mean(data^2, na.rm=TRUE))
 
-getCharacteristicsHelper <- function(mtx, withNAs=TRUE, fast = TRUE){
+
+applyFunctionWithSeed<- function(functionName, seed=123,  ...){
+  oldseed <- NULL
+  if (exists(".Random.seed"))
+    oldseed <- .Random.seed
+  
+  set.seed(seed)
+  res <- functionName(...)
+  
+  if (!is.null(oldseed))
+    .Random.seed <- oldseed
+  
+  return(res)
+} 
+
+# row means 
+get_rowMeans <- function(mtx, ...) return(apply(mtx,1,mean,na.rm=T))
+
+# row standard deviations
+get_rowSd <- function(mtx, ...) return(apply(mtx,1,sd,na.rm=T))
+
+# Pairwise pearson correlation of rows
+# For more than nmaxFeature feature a subset of nmaxFeatu random features is selected to speed up runtime. 
+get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman"){
+  res <- seed <- NA
+  
+  if (nrow(mtx)>nmaxFeature){ # random subset of features are selected
+    seed <- sample(1:1000000000, 1)
+    randomRows <- applyFunctionWithSeed(sample, seed = seed, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)))
+    mtx.sub <- mtx[randomRows,]
+    res <- cor(t(mtx.sub), t(mtx.sub), method = corMethod, use = "pairwise.complete.obs")
+  } else {
+    res <- cor(t(mtx), t(mtx), method = corMethod, use = "pairwise.complete.obs")
+  }
+  
+  return(list(res = res, seed = seed))  
+}
+
+# pairwise pearson correlation of columns
+get_colCorr <- function(mtx, corMethod = "spearman"){
+  return(dis <- cor(mtx, mtx, method = corMethod, use = "pairwise.complete.obs"))
+}
+
+# bimodalIndex 
+# bimodality of row correlations
+get_bimodalityRowCorr <- function(mtx, ...) {
+  corrRes <- get_rowCorr(mtx)
+  res <- BimodalIndex::bimodalIndex(matrix(corrRes$res, nrow=1), verbose=F)$BI
+  return(list(res = res, seed = corrRes$seed))
+}
+
+# bimodality of column correlations
+get_bimodalityColCorr <- function(mtx, ...) return(BimodalIndex::bimodalIndex(matrix(get_colCorr(mtx),nrow=1),verbose=F)$BI)
+
+# Poly2 (features)
+# linear coefficient of 2nd order polynomial fit with x = row means, y = row variances
+get_LinearCoefPoly2XRowMeansYRowVars <- function(mtx, ...){
+  return(unname(lm(y~x+I(x^2), data=data.frame(
+    y=get_rowSd(mtx)^2,
+    x=get_rowMeans(mtx)))$coefficients[2]))
+}
+
+# quadratic coefficient of 2rd order polynomial fit with x = row means, y = row variances
+get_QuadraticCoefPoly2XRowMeansYRowVars <- function(mtx, ...){ 
+  return(unname(lm(y~x+I(x^2), data=data.frame(
+    y=get_rowSd(mtx)^2,
+    x=get_rowMeans(mtx)))$coefficients[3]))
+}
+
+# Coef.hclust (features)
+#h cluster coefficient rows
+get_coefHclustRows <- function(mtx, ...) {
+  mtx.tmp <- mtx[order(rowSums(is.na(mtx))), ]
+  # mtx.tmp <- mtx.tmp[1:min(500,dim(mtx)[1]),1:min(500,dim(mtx)[2])] # max. 500 features and samples
+  seed <- sample(1:1000000000, 1)
+  randomCols <- applyFunctionWithSeed(sample, seed = seed, x = 1:ncol(mtx), size= min(500, ncol(mtx)))
+  mtx.tmp <- mtx.tmp[1:min(500, nrow(mtx)), randomCols] # max. 500 features and samples
+  return(list(res = cluster::coef.hclust(amap::hcluster(mtx.tmp)), seed = seed))
+}
+
+getCharacteristicsHelper <- function(mtx, fast = TRUE){
   #KS.SignProp <- kolSmirTestSignProp(mtx)
   
   if (is.vector(mtx)){
@@ -110,10 +193,31 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE, fast = TRUE){
   
   # var.groups.ratio <- median(matrixStats::rowVars(mtx[, 1:group.size], na.rm = TRUE)/matrixStats::rowVars(mtx[, (group.size+1):ncol(mtx)], na.rm = TRUE), na.rm = TRUE)
   
+  prctPC1 <- prctPC2 <- bimodalityRowCorr <- bimodalityRowCorrSeed <- bimodalityColCorr <- 
+    linearCoefPoly2Row <- quadraticCoefPoly2Row <- coefHclustRows <- coefHclustRowsSeed <- NA
+  
+  # bimodalIndex 
+  try({
+    bimodalityRowCorrRes <- get_bimodalityRowCorr(mtx)
+    bimodalityRowCorr <- bimodalityRowCorrRes$res
+    bimodalityRowCorrSeed <- bimodalityRowCorrRes$seed
+  })
+  bimodalityColCorr <- try(get_bimodalityColCorr(mtx)) 
+  
+  # Poly2 (features)
+  linearCoefPoly2Row <- try(get_LinearCoefPoly2XRowMeansYRowVars(mtx))
+  quadraticCoefPoly2Row <- try(get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
+  
+  # Coef.hclust (features)
+  try({
+    coefHclustRowsRes <- get_coefHclustRows(mtx)
+    coefHclustRows <- coefHclustRowsRes$res
+    coefHclustRowsSeed <- coefHclustRowsRes$seed
+  })
+  
   mtx <- mtx %>% t()
   mtx <- mtx[ , which(apply(mtx, 2, var, na.rm = TRUE) != 0)] # Remove zero variance columns 
 
-  prctPC1 <- prctPC2 <- NA
   if (!is.vector(mtx)){
     try({
       pca <- pcaMethods::pca(mtx, method="nipals", center = TRUE, maxSteps=5000)
@@ -133,7 +237,15 @@ getCharacteristicsHelper <- function(mtx, withNAs=TRUE, fast = TRUE){
     kurtosis = kurtosis,
     skewness = skewness,
     prctPC1 = prctPC1, 
-    prctPC2 = prctPC2)
+    prctPC2 = prctPC2,
+    bimodalityRowCorr = bimodalityRowCorr,
+    bimodalityRowCorrSeed = bimodalityRowCorrSeed,
+    bimodalityColCorr = bimodalityColCorr,
+    linearCoefPoly2Row = linearCoefPoly2Row,
+    quadraticCoefPoly2Row = quadraticCoefPoly2Row,
+    coefHclustRows = coefHclustRows,
+    coefHclustRowsSeed = coefHclustRowsSeed
+    )
   
   if (!fast){
     resultvec <- c(resultvec, 
@@ -161,7 +273,7 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
   # Compare correlation when taking "Intensity " and "LFQ " columns for PXD020490/proteinGroups.txt
   #KS.SignProp <- kolSmirTestSignProp(as.matrix(df))
 
-  characts.wNAs <- getCharacteristicsHelper(mtx, withNAs=TRUE, fast = fast)
+  characts.wNAs <- getCharacteristicsHelper(mtx, fast = fast)
   names(characts.wNAs) <- paste0(names(characts.wNAs), ".wNAs")
 
 #   # Remove rows with NAs
@@ -220,18 +332,18 @@ getNaFeatures <- function(mtx) {
   rowNaPercentage <- rowMeans(is.na(mtx))*100
   rowMeans <- rowMeans(mtx, na.rm = TRUE)
   
-  corColPval <- corRowPval <- corColR <- corRowR <- NA
+  corSampleMeanNAPval <- corAnalyteMeanNAPval <- corSampleMeanNA <- corAnalyteMeanNA <- NA
   corCoefType <- "spearman"
   try({
     cortestCol <- cor.test(colNaPercentage, colMeans, method = corCoefType)
-    corColPval <- cortestCol$p.value
-    corColR <- unname(cortestCol$estimate)
+    corSampleMeanNAPval <- cortestCol$p.value
+    corSampleMeanNA <- unname(cortestCol$estimate)
   })
   
   try({
     cortestRow <- cor.test(rowNaPercentage, rowMeans, method = corCoefType)
-    corRowPval <- cortestRow$p.value
-    corRowR <- unname(cortestRow$estimate)
+    corAnalyteMeanNAPval <- cortestRow$p.value
+    corAnalyteMeanNA <- unname(cortestRow$estimate)
   })
 
   c(
@@ -243,10 +355,10 @@ getNaFeatures <- function(mtx) {
     maxColNaPercentage = max(colNaPercentage),
     percNATotal = mean(is.na(mtx)) * 100,
     percOfRowsWithNAs = sum(apply(mtx, 1, anyNA))/nrow(mtx) * 100,
-    corColPval = corColPval,
-    corColR = corColR,
-    corRowPval = corRowPval,
-    corRowR = corRowR
+    corSampleMeanNA = corSampleMeanNA,
+    corSampleMeanNAPval = corSampleMeanNAPval,
+    corAnalyteMeanNA = corAnalyteMeanNA,
+    corAnalyteMeanNAPval = corAnalyteMeanNAPval
   )
 }
 
@@ -349,7 +461,7 @@ readInAllMetabolightsFiles <- function(dataTypePath, lst = list(), zerosToNA = F
       try({
         mtx <- readInMetabolightsFiles(filePath = file, zerosToNA = zerosToNA)
         if (!is.vector(mtx)) {
-          if (nrow(mtx) != 0) lst <- append(lst, getDataCharacteristics(mtx=mtx, 
+          if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, 
                                                                         datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", basename(file))), 
                                                                         dataType=dataTypePath))
         }
@@ -357,6 +469,16 @@ readInAllMetabolightsFiles <- function(dataTypePath, lst = list(), zerosToNA = F
     }
   }
   lst
+}
+
+removeEmptyRowsAndColumns <- function(mtx, zerosToNA = FALSE){
+  if (zerosToNA) mtx[mtx == 0] <- NA
+  mtx[mtx == "NaN"] <- NA
+  # remove rows with only NAs
+  # mtx <- mtx[rowSums(is.na(mtx) | mtx == 0) != ncol(mtx), ]
+  mtx <- subset(mtx, rowSums(is.na(mtx) | mtx == 0) != ncol(mtx))
+  if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
+  mtx
 }
 
 readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FALSE, alternativeRowLabelCol = "") {
@@ -379,13 +501,7 @@ readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FA
   dat <- NULL
   
   row.names(mtx) <- make.names(unlist(geneId), unique=TRUE)
-  
-  if (zerosToNA) mtx[mtx == 0] <- NA
-  mtx[mtx == "NaN"] <- NA
-  # remove rows with only NAs
-  # mtx <- mtx[rowSums(is.na(mtx) | mtx == 0) != ncol(mtx), ]
-  mtx <- subset(mtx, rowSums(is.na(mtx) | mtx == 0) != ncol(mtx))
-  if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
+  mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = zerosToNA)
   mtx
 }
 
@@ -401,7 +517,7 @@ readInAllDataTypeFiles <- function(dataTypePath, rowLabelCol, colsToRemove, zero
                         alternativeRowLabelCol = alternativeRowLabelCol)
       # Only keep datasets with two dimensions
       if (!is.vector(mtx)) {
-        if (nrow(mtx) != 0)  lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
+        if (nrow(mtx) > 9 & ncol(mtx) > 4)  lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
       }
     })
   } 
@@ -488,32 +604,38 @@ getDataCharacteristicsForDataType <- function(dataType) {
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = "Gene ID", 
                                   colsToRemove = c("Gene ID", "Gene Name", "DesignElementAccession", "Design Element"),
+                                  zerosToNA = TRUE,
                                   lst = lst)
   } else if (dataType == "RNAseq_raw"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = "Gene ID", 
                                   colsToRemove = c("Gene ID", "Gene Name"),
+                                  zerosToNA = TRUE,
                                   lst = lst)
   } else if (dataType == "RNAseq_raw_undecorated"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = "Gene ID", 
                                   colsToRemove = c("Gene ID", "Gene"),
+                                  zerosToNA = TRUE,
                                   lst = lst,
                                   alternativeRowLabelCol = "Gene")
   } else if (dataType == "RNAseq_transcripts_raw_undecorated"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = "Transcript ID", 
                                   colsToRemove = c("Transcript ID"),
+                                  zerosToNA = TRUE,
                                   lst = lst)
   } else if (dataType == "RNAseq_transcripts_tpms"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = "GeneID", 
                                   colsToRemove = c("Gene ID", "Gene Name", "GeneID"),
+                                  zerosToNA = TRUE,
                                   lst = lst)
   } else if (dataType %in% c("RNAseq_fpkms_median", "RNAseq_tpms_median", "microbiome")){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = 1, 
                                   colsToRemove = c(),
+                                  zerosToNA = TRUE,
                                   lst = lst)
   } else if (dataType == "proteomics_expressionatlas"){
     dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
@@ -523,9 +645,9 @@ getDataCharacteristicsForDataType <- function(dataType) {
         try({
           mtx <- readInMaxQuantFiles(filePath = dataTypeFilePath, 
                                      quantColPattern = quantColPattern,
-                                     zerosToNA = FALSE)
+                                     zerosToNA = TRUE)
           if (!is.vector(mtx)) {
-            if (nrow(mtx) != 0)  {
+            if (nrow(mtx) > 9 & ncol(mtx) > 4) {
               lst <- append(lst, 
                             getDataCharacteristics(
                               mtx=mtx, 
@@ -548,10 +670,10 @@ getDataCharacteristicsForDataType <- function(dataType) {
             try({
               mtx <- readInMaxQuantFiles(filePath = file,
                                          quantColPattern = quantColPattern,
-                                         zerosToNA = FALSE)
+                                         zerosToNA = TRUE)
               
               if (!is.vector(mtx)) {
-                if (nrow(mtx) != 0)  {
+                if (nrow(mtx) > 9 & ncol(mtx) > 4)  {
                   lst <- append(lst, 
                                 getDataCharacteristics(
                                   mtx=mtx, 
@@ -565,7 +687,7 @@ getDataCharacteristicsForDataType <- function(dataType) {
       }
     }
   } else if (dataType %in% c("metabolomics_MS", "metabolomics_NMR")){
-    lst <- readInAllMetabolightsFiles(dataTypePath, lst = lst)
+    lst <- readInAllMetabolightsFiles(dataTypePath, lst = lst,  zerosToNA = TRUE)
   } else if (dataType %in% c("sc_normalized", "sc_unnormalized")){
     dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
     for (dataTypeFilePath in dataTypeFilePaths){
@@ -574,8 +696,20 @@ getDataCharacteristicsForDataType <- function(dataType) {
       # library(Matrix)
       mtx <- Matrix::readMM(dataTypeFilePath)
       mtx <- as.matrix(mtx)
+      mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
       if (!is.vector(mtx)) {
-        if (nrow(mtx) != 0) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
+        if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
+      }
+    }
+  } else if (dataType == "scProteomics"){
+    dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
+    for (dataTypeFilePath in dataTypeFilePaths){
+      print(dataTypeFilePath)
+      mtx <- read.csv(dataTypeFilePath, row.names = 1)
+      mtx <- as.matrix(mtx)
+      mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
+      if (!is.vector(mtx)) {
+        if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
       }
     }
   } 
@@ -590,6 +724,7 @@ getDataCharacteristicsForDataType <- function(dataType) {
 }
 
 dataTypes <- c(
+  "scProteomics",
   "metabolomics_NMR", "metabolomics_MS", 
   "proteomics_expressionatlas", "proteomics_pride",
   "microbiome",
