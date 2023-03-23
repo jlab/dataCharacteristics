@@ -10,6 +10,7 @@ library(dplyr)
 library(BimodalIndex)
 library(cluster)
 library(amap)
+library(mclust)
 
 `%notin%` <- Negate(`%in%`)
 #################################################################################
@@ -110,29 +111,74 @@ get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman"){
     seed <- sample(1:1000000000, 1)
     randomRows <- applyFunctionWithSeed(sample, seed = seed, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)))
     mtx.sub <- mtx[randomRows,]
-    res <- cor(t(mtx.sub), t(mtx.sub), method = corMethod, use = "pairwise.complete.obs")
+    res <- cor(t(mtx.sub), method = corMethod, use = "pairwise.complete.obs")
   } else {
-    res <- cor(t(mtx), t(mtx), method = corMethod, use = "pairwise.complete.obs")
+    res <- cor(t(mtx), method = corMethod, use = "pairwise.complete.obs")
   }
   
   return(list(res = res, seed = seed))  
 }
 
 # pairwise pearson correlation of columns
-get_colCorr <- function(mtx, corMethod = "spearman"){
-  return(dis <- cor(mtx, mtx, method = corMethod, use = "pairwise.complete.obs"))
+get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman"){
+  res <- seed <- NA
+  if (nrow(mtx) > nmaxSamples){ # random subset of features are selected
+    seed <- sample(1:1000000000, 1)
+    randomCols <- applyFunctionWithSeed(sample, seed = seed, x = 1:nrow(mtx), size= min(nmaxSamples, nrow(mtx)))
+    mtx.sub <- mtx[, randomCols]
+    res <- cor(mtx.sub, method = corMethod, use = "pairwise.complete.obs")
+  } else {
+    res <- cor(mtx, method = corMethod, use = "pairwise.complete.obs")
+  }
+  return(list(res = res, seed = seed))  
+  #return(dis <- cor(mtx, mtx, method = corMethod, use = "pairwise.complete.obs"))
+}
+
+# Adjusted from BimodalIndex::bimodalIndex such that itmax can befined
+bimodalIndexWithIterDef <- function (dataset, verbose = TRUE, itmax = 10000, ...) {
+  bim <- matrix(NA, nrow = nrow(dataset), ncol = 6)
+  if (verbose) 
+    cat("1 ")
+  for (i in 1:nrow(dataset)) {
+    if (verbose && 0 == i%%100) 
+      cat(".")
+    if (verbose && 0 == i%%1000) 
+      cat(paste("\n", 1 + i/1000, " ", sep = ""))
+    x <- as.vector(as.matrix(dataset[i, ]))
+    if (any(is.na(x))) 
+      next
+    mc <- mclust::Mclust(x, G = 2, modelNames = "E", verbose = FALSE, control = mclust::emControl(itmax = itmax))
+    sigma <- sqrt(mc$parameters$variance$sigmasq)
+    delta <- abs(diff(mc$parameters$mean))/sigma
+    pi <- mc$parameters$pro[1]
+    bi <- delta * sqrt(pi * (1 - pi))
+    bim[i, ] <- c(mc$parameters$mean, sigma = sigma, delta = delta, 
+                  pi = pi, bim = bi)
+  }
+  if (verbose) 
+    cat("\n")
+  dimnames(bim) <- list(rownames(dataset), c("mu1", "mu2", 
+                                             "sigma", "delta", "pi", "BI"))
+  bim <- as.data.frame(bim)
+  bim
 }
 
 # bimodalIndex 
 # bimodality of row correlations
 get_bimodalityRowCorr <- function(mtx, ...) {
   corrRes <- get_rowCorr(mtx)
-  res <- BimodalIndex::bimodalIndex(matrix(corrRes$res, nrow=1), verbose=F)$BI
+  res <- bimodalIndexWithIterDef(matrix(corrRes$res, nrow=1), verbose=F)$BI
   return(list(res = res, seed = corrRes$seed))
 }
 
 # bimodality of column correlations
-get_bimodalityColCorr <- function(mtx, ...) return(BimodalIndex::bimodalIndex(matrix(get_colCorr(mtx),nrow=1),verbose=F)$BI)
+#get_bimodalityColCorr <- function(mtx, ...) return(BimodalIndex::bimodalIndex(matrix(get_colCorr(mtx),nrow=1),verbose=F)$BI)
+get_bimodalityColCorr <- function(mtx, ...) {
+  corrRes <- get_colCorr(mtx)
+  res <- bimodalIndexWithIterDef(matrix(corrRes$res, nrow=1), verbose=F)$BI
+  return(list(res = res, seed = corrRes$seed))
+}
+
 
 # Poly2 (features)
 # linear coefficient of 2nd order polynomial fit with x = row means, y = row variances
@@ -202,7 +248,12 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     bimodalityRowCorr <- bimodalityRowCorrRes$res
     bimodalityRowCorrSeed <- bimodalityRowCorrRes$seed
   })
-  bimodalityColCorr <- try(get_bimodalityColCorr(mtx)) 
+  
+  try({
+    bimodalityColCorrRes <- get_bimodalityColCorr(mtx)
+    bimodalityColCorr <- bimodalityColCorrRes$res
+    bimodalityColCorrSeed <- bimodalityColCorrRes$seed
+  })
   
   # Poly2 (features)
   linearCoefPoly2Row <- try(get_LinearCoefPoly2XRowMeansYRowVars(mtx))
@@ -241,6 +292,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     bimodalityRowCorr = bimodalityRowCorr,
     bimodalityRowCorrSeed = bimodalityRowCorrSeed,
     bimodalityColCorr = bimodalityColCorr,
+    bimodalityColCorrSeed = bimodalityColCorrSeed,
     linearCoefPoly2Row = linearCoefPoly2Row,
     quadraticCoefPoly2Row = quadraticCoefPoly2Row,
     coefHclustRows = coefHclustRows,
