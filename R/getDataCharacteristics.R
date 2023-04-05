@@ -368,6 +368,7 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
   if (takeLog2) mtx <- log2(mtx)
   mtx[mtx == "NaN"] <- NA
   
+  nDistinctValues <- length(unique(c(mtx)))
   naFeatures <- getNaFeatures(mtx)
   # if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
 
@@ -421,7 +422,7 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
 #   names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
   
   # c(naFeatures, characts.wNAs, characts.woNAs)
-  c(naFeatures, characts.wNAs, nNegativeNumbers = nNegativeNumbers)
+  c(naFeatures, characts.wNAs, nDistinctValues = nDistinctValues, nNegativeNumbers = nNegativeNumbers)
 }
 
 getNaFeatures <- function(mtx) {
