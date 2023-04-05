@@ -1,13 +1,20 @@
 
 # setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
+# All datasets of Metabolights project MTBLS1541
+# (m_MTBLS1541_AF_NMR_metabolite_profiling_v2_maf.tsv , m_MTBLS1541_Plasma_NMR_metabolite_profiling_v2_maf.tsv , m_MTBLS1541_Urine_NMR_metabolite_profiling_v2_maf.tsv)
+# are excluded because it was unclear what the quantitative data corresponds to
+
+# m_MTBLS1497_Serum_NMR_metabolite_profiling_v2_maf.tsv and m_MTBLS1497_Urine_NMR_metabolite_profiling_v2_maf.tsv have been changed manually because of 
+# meta data that had to be removed from numeric data
+
 ##########################################################################################
 library(data.table)
 library(pcaMethods)
 library(Matrix)
 library(dplyr)
 # library(foreach)
-library(BimodalIndex)
+# library(BimodalIndex)
 library(cluster)
 library(amap)
 library(mclust)
@@ -81,20 +88,20 @@ calc_variance <- function(data){
   
 calc_RMS <- function(data) sqrt(mean(data^2, na.rm=TRUE))
 
-
-applyFunctionWithSeed<- function(functionName, seed=123,  ...){
-  oldseed <- NULL
-  if (exists(".Random.seed"))
-    oldseed <- .Random.seed
+applyFunctionWithSeed <- function(functionName, seed = 123,  ...){
+  oldseed <- .Random.seed
+  
+  if (is.null(seed)) {
+    seed <- .Random.seed
+  }
   
   set.seed(seed)
   res <- functionName(...)
   
-  if (!is.null(oldseed))
-    .Random.seed <- oldseed
+  .Random.seed <- oldseed
   
-  return(res)
-} 
+  return(list(res = res, seed = seed))
+}
 
 # row means 
 get_rowMeans <- function(mtx, ...) return(apply(mtx,1,mean,na.rm=T))
@@ -104,27 +111,26 @@ get_rowSd <- function(mtx, ...) return(apply(mtx,1,sd,na.rm=T))
 
 # Pairwise pearson correlation of rows
 # For more than nmaxFeature feature a subset of nmaxFeatu random features is selected to speed up runtime. 
-get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman"){
-  res <- seed <- NA
+get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman",...){
+  res <- seedUsed <- NA
   
   if (nrow(mtx)>nmaxFeature){ # random subset of features are selected
-    seed <- sample(1:1000000000, 1)
-    randomRows <- applyFunctionWithSeed(sample, seed = seed, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)))
-    mtx.sub <- mtx[randomRows,]
+    randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)), ...)
+    seedUsed <- randomRows$seed
+    mtx.sub <- mtx[randomRows$res,]
     res <- cor(t(mtx.sub), method = corMethod, use = "pairwise.complete.obs")
   } else {
     res <- cor(t(mtx), method = corMethod, use = "pairwise.complete.obs")
   }
   
-  return(list(res = res, seed = seed))  
+  return(list(res = res, seed = seedUsed))  
 }
 
 # pairwise pearson correlation of columns
-get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman"){
+get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
   res <- seed <- NA
   if (nrow(mtx) > nmaxSamples){ # random subset of features are selected
-    seed <- sample(1:1000000000, 1)
-    randomCols <- applyFunctionWithSeed(sample, seed = seed, x = 1:nrow(mtx), size= min(nmaxSamples, nrow(mtx)))
+    randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)), ...)
     mtx.sub <- mtx[, randomCols]
     res <- cor(mtx.sub, method = corMethod, use = "pairwise.complete.obs")
   } else {
@@ -133,6 +139,41 @@ get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman"){
   return(list(res = res, seed = seed))  
   #return(dis <- cor(mtx, mtx, method = corMethod, use = "pairwise.complete.obs"))
 }
+
+
+# Pairwise pearson correlation of rows
+# For more than nmaxFeature feature a subset of nmaxFeatu random features is selected to speed up runtime. 
+get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman", ...){
+  res <- seedUsed <- NA
+  
+  if (nrow(mtx)>nmaxFeature){ # random subset of features are selected
+    randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)), ...)
+    seedUsed <- randomRows$seed
+    mtx.sub <- mtx[randomRows$res,]
+    res <- cor(t(mtx.sub), method = corMethod, use = "pairwise.complete.obs")
+  } else {
+    res <- cor(t(mtx), method = corMethod, use = "pairwise.complete.obs")
+  }
+  
+  return(list(res = res, seed = seedUsed))  
+}
+
+# pairwise pearson correlation of columns
+get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
+  res <- seedUsed <- NA
+  
+  if (nrow(mtx) > nmaxSamples){ # random subset of features are selected
+    randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)),  ...)
+    seedUsed <- randomCols$seed
+    mtx.sub <- mtx[, randomCols$res]
+    res <- cor(mtx.sub, method = corMethod, use = "pairwise.complete.obs")
+  } else {
+    res <- cor(mtx, method = corMethod, use = "pairwise.complete.obs")
+  }
+  return(list(res = res, seed = seedUsed))  
+}
+
+
 
 # Adjusted from BimodalIndex::bimodalIndex such that itmax can befined
 bimodalIndexWithIterDef <- function (dataset, verbose = TRUE, itmax = 10000, ...) {
@@ -165,7 +206,8 @@ bimodalIndexWithIterDef <- function (dataset, verbose = TRUE, itmax = 10000, ...
 
 # bimodalIndex 
 # bimodality of row correlations
-get_bimodalityRowCorr <- function(mtx, ...) {
+get_bimodalityRowCorr <- function(mtx, naToZero = FALSE, ...) {
+  if (naToZero) mtx[is.na(mtx)] <- 0
   corrRes <- get_rowCorr(mtx)
   res <- bimodalIndexWithIterDef(matrix(corrRes$res, nrow=1), verbose=F)$BI
   return(list(res = res, seed = corrRes$seed))
@@ -173,7 +215,8 @@ get_bimodalityRowCorr <- function(mtx, ...) {
 
 # bimodality of column correlations
 #get_bimodalityColCorr <- function(mtx, ...) return(BimodalIndex::bimodalIndex(matrix(get_colCorr(mtx),nrow=1),verbose=F)$BI)
-get_bimodalityColCorr <- function(mtx, ...) {
+get_bimodalityColCorr <- function(mtx, naToZero = FALSE, ...) {
+  if (naToZero) mtx[is.na(mtx)] <- 0
   corrRes <- get_colCorr(mtx)
   res <- bimodalIndexWithIterDef(matrix(corrRes$res, nrow=1), verbose=F)$BI
   return(list(res = res, seed = corrRes$seed))
@@ -197,14 +240,17 @@ get_QuadraticCoefPoly2XRowMeansYRowVars <- function(mtx, ...){
 
 # Coef.hclust (features)
 #h cluster coefficient rows
-get_coefHclustRows <- function(mtx, ...) {
+get_coefHclustRows <- function(mtx, naToZero = FALSE, ...) {
+  if (naToZero) mtx[is.na(mtx)] <- 0
   mtx.tmp <- mtx[order(rowSums(is.na(mtx))), ]
   # mtx.tmp <- mtx.tmp[1:min(500,dim(mtx)[1]),1:min(500,dim(mtx)[2])] # max. 500 features and samples
-  seed <- sample(1:1000000000, 1)
-  randomCols <- applyFunctionWithSeed(sample, seed = seed, x = 1:ncol(mtx), size= min(500, ncol(mtx)))
-  mtx.tmp <- mtx.tmp[1:min(500, nrow(mtx)), randomCols] # max. 500 features and samples
+  randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(500, ncol(mtx)), ...)
+  seed <- randomCols$seed
+  randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(500, nrow(mtx)), seed = seed, ...)
+  mtx.tmp <- mtx.tmp[randomRows$res, randomCols$res] # max. 500 features and samples
   return(list(res = cluster::coef.hclust(amap::hcluster(mtx.tmp)), seed = seed))
 }
+
 
 getCharacteristicsHelper <- function(mtx, fast = TRUE){
   #KS.SignProp <- kolSmirTestSignProp(mtx)
@@ -244,13 +290,13 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   # bimodalIndex 
   try({
-    bimodalityRowCorrRes <- get_bimodalityRowCorr(mtx)
+    bimodalityRowCorrRes <- get_bimodalityRowCorr(mtx, naToZero = TRUE)
     bimodalityRowCorr <- bimodalityRowCorrRes$res
     bimodalityRowCorrSeed <- bimodalityRowCorrRes$seed
   })
   
   try({
-    bimodalityColCorrRes <- get_bimodalityColCorr(mtx)
+    bimodalityColCorrRes <- get_bimodalityColCorr(mtx, naToZero = TRUE)
     bimodalityColCorr <- bimodalityColCorrRes$res
     bimodalityColCorrSeed <- bimodalityColCorrRes$seed
   })
@@ -261,7 +307,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   # Coef.hclust (features)
   try({
-    coefHclustRowsRes <- get_coefHclustRows(mtx)
+    coefHclustRowsRes <- get_coefHclustRows(mtx, naToZero = TRUE)
     coefHclustRows <- coefHclustRowsRes$res
     coefHclustRowsSeed <- coefHclustRowsRes$seed
   })
@@ -314,6 +360,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
 
 getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
 
+  nNegativeNumbers <- sum(mtx < 0, na.rm = TRUE)
   if (takeLog2) mtx <- log2(mtx)
   mtx[mtx == "NaN"] <- NA
   
@@ -370,7 +417,7 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
 #   names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
   
   # c(naFeatures, characts.wNAs, characts.woNAs)
-  c(naFeatures, characts.wNAs)
+  c(naFeatures, characts.wNAs, nNegativeNumbers = nNegativeNumbers)
 }
 
 getNaFeatures <- function(mtx) {
@@ -378,10 +425,7 @@ getNaFeatures <- function(mtx) {
   rowNaPercentage <- rowMeans(is.na(mtx))*100
   rowNonNaNumber <- rowSums(!is.na(mtx))
   
-  colNaPercentage <- colMeans(is.na(mtx))*100
   colMeans <- colMeans(mtx, na.rm = TRUE)
-  
-  rowNaPercentage <- rowMeans(is.na(mtx))*100
   rowMeans <- rowMeans(mtx, na.rm = TRUE)
   
   corSampleMeanNAPval <- corAnalyteMeanNAPval <- corSampleMeanNA <- corAnalyteMeanNA <- NA
@@ -436,6 +480,17 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
 }
 ################################################################################
 
+removeEmptyRowsAndColumns <- function(mtx, zerosToNA = FALSE){
+  if (zerosToNA) mtx[mtx == 0] <- NA
+  mtx[mtx %in% c("NaN", "N/A", "<-->")] <- NA
+  # remove rows with only NAs
+  # mtx <- mtx[rowSums(is.na(mtx) | mtx == 0) != ncol(mtx), ]
+  mtx <- subset(mtx, rowSums(is.na(mtx) | mtx == 0) != ncol(mtx))
+  if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
+  mtx
+}
+
+
 readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
   dat <- read.csv(filePath, check.names = FALSE, sep = "\t")
   
@@ -471,16 +526,41 @@ readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
     "pattern ID",
     "pattern_ID",
     "chemical_shift",
+    "chemical_shift F2 (ppm)",
+    "chemical_shift F1 (ppm)",
     "multiplicity",
     "reliability",
     "Reliability",
     "Functional group",
     "Molecule source",
-    "KEGG_database_identifier"
+    "KEGG_database_identifier",
+    "row_id", 
+    "pubchem_first_synonym", 
+    "final_external_id", 
+    "pubchem_cid", 
+    "pubchem_cid_ik", 
+    "csid_ik", 
+    "final_smiles", 
+    "final_inchi", 
+    "final_inchi_key", 
+    "search_type", 
+    "ID", 
+    "NAME", 
+    "IUPAC_NAME", 
+    "DATABASE_ACCESSION", 
+    "pubchem_smiles", 
+    "pubchem_inchi", 
+    "pubchem_inchi_key", 
+    "pubchem_formula", 
+    "unichem_id", 
+    "dime_id",
+    "FDR",
+    "p value",
+    "Adjusted p value"
     )
   
   metabolite_identification <- dat$metabolite_identification
-  dat <- dat[,colnames(dat) %notin% remove]
+  dat <- dat[, colnames(dat) %notin% remove]
   mtx <- as.matrix(dat)
   
   try({
@@ -491,15 +571,13 @@ readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
   dat <- NULL
   
   mtx[mtx == "BLQ"] <- 0
-  if (zerosToNA) mtx[mtx == 0] <- NA
-  mtx[mtx %in% c("NaN", "")] <- NA
-  # remove rows with only NAs
-  # mtx <- mtx[rowSums(is.na(mtx) | mtx == 0) != ncol(mtx), ]
-  mtx <- subset(mtx, rowSums(is.na(mtx) | mtx == 0) != ncol(mtx))
-  if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
+  
+  mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = zerosToNA)
   
   mtx <- apply(mtx, 2, gsub, pattern=",", replacement=".")
   class(mtx) <- "numeric"
+  
+  mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = zerosToNA)
   mtx
 }
 
@@ -512,7 +590,8 @@ readInAllMetabolightsFiles <- function(dataTypePath, lst = list(), zerosToNA = F
       print(file)
       try({
         mtx <- readInMetabolightsFiles(filePath = file, zerosToNA = zerosToNA)
-        if (!is.vector(mtx)) {
+        # if (!is.vector(mtx)) {
+        if (!is.vector(mtx) & ((sum(mtx < 0, na.rm = TRUE) / length(mtx)) < 0.01)) {
           if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, 
                                                                         datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", basename(file))), 
                                                                         dataType=dataTypePath))
@@ -749,6 +828,7 @@ getDataCharacteristicsForDataType <- function(dataType) {
       mtx <- Matrix::readMM(dataTypeFilePath)
       mtx <- as.matrix(mtx)
       mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
+      # Skip datasets if they contain more than 1% negative numbers
       if (!is.vector(mtx)) {
         if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
       }
