@@ -88,11 +88,34 @@ calc_variance <- function(data){
   
 calc_RMS <- function(data) sqrt(mean(data^2, na.rm=TRUE))
 
+# Function taken from mlr3misc package
+#' @title Get the Random Seed
+#'
+#' @description
+#' Retrieves the current random seed (`.Random.seed` in the global environment),
+#' and initializes the RNG first, if necessary.
+#'
+#' @return `integer()`. Depends on the [base::RNGkind()].
+#' @export
+#' @examples
+#' str(get_seed())
+get_seed = function() {
+  seed = get0(".Random.seed", globalenv(), mode = "integer", inherits = FALSE)
+  if (is.null(seed)) {
+    runif(1L) # .Random.seed is created when you first call a random number generator
+    seed = get0(".Random.seed", globalenv(), mode = "integer", inherits = FALSE)
+  }
+  return(seed)
+}
+
 applyFunctionWithSeed <- function(functionName, seed = 123,  ...){
-  oldseed <- .Random.seed
+  
+  #oldseed <- .Random.seed
+  oldseed <- get_seed()
   
   if (is.null(seed)) {
-    seed <- .Random.seed
+    # seed <- .Random.seed
+    seed <- get_seed()
   }
   
   set.seed(seed)
