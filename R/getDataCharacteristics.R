@@ -66,6 +66,15 @@ calc_meanDeviation <- function(data){
   return(scale * sum(abs(data - mu), na.rm=TRUE))
 }
 
+calc_variance <- function(data){
+  # var(c(data), na.rm=TRUE) # was replaced because for single cell data large vectors can become a problem
+  1/(sum(!is.na(data))-1)*sum((data-mean(data, na.rm = TRUE))^2, na.rm = TRUE) 
+}
+
+calc_sd <- function(data){
+  sqrt(calc_variance(data))
+}
+
 calc_skewness <- function (data){
   data <- data[!is.na(data)]
   # return(sum((data - mean(data))^3)/(length(data) * sd(data)^3))
@@ -79,15 +88,6 @@ calc_uniformity <- function(data, nbins=length(unique(c(data)))){
   cuts <- table(cut(data, seq(im_range[1], im_range[2], by=diff(im_range)/nbins), include.lowest=TRUE))/length(data)
   function_vals <- vapply(cuts, function(data) data^2, FUN.VALUE = 1)
   return(sum(function_vals))
-}
-
-calc_variance <- function(data){
-  # var(c(data), na.rm=TRUE) # was replaced because for single cell data large vectors can become a problem
-  1/(sum(!is.na(data))-1)*sum((data-mean(data, na.rm = TRUE))^2, na.rm = TRUE) 
-}
-
-calc_sd <- function(data){
-  sqrt(calc_variance(data))
 }
 
 calc_RMS <- function(data) sqrt(mean(data^2, na.rm=TRUE))
@@ -273,11 +273,15 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   min <- min(mtx, na.rm = TRUE)
   max <- max(mtx, na.rm = TRUE)
   
-  medianSampleVariance <- median(apply(mtx, 2, var,  na.rm=TRUE), na.rm = TRUE)
-  medianAnalyteVariance <- median(unname(apply(mtx, 1, var,  na.rm=TRUE)), na.rm = TRUE)
+  medianSampleVariance <- medianAnalyteVariance <- skewness <- kurtosis <- variance <-
+    prctPC1 <- prctPC2 <- bimodalityRowCorr <- bimodalityRowCorrSeed <- bimodalityColCorr <- bimodalityColCorrSeed <- 
+    linearCoefPoly2Row <- quadraticCoefPoly2Row <- coefHclustRows <- coefHclustRowsSeed <- NA
   
-  skewness <- calc_skewness(mtx)
-  kurtosis <- calc_kurtosis(mtx)
+  try({medianSampleVariance <- median(apply(mtx, 2, calc_variance), na.rm = TRUE)})
+  try({medianAnalyteVariance <- median(unname(apply(mtx, 1, calc_variance)), na.rm = TRUE)})
+  
+  try({skewness <- calc_skewness(mtx)})
+  try({kurtosis <- calc_kurtosis(mtx)})
   
   if (!fast){
     entropy <- calc_entropy(mtx) #
@@ -286,14 +290,11 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     RMS <- calc_RMS(mtx)
   }
   
-  variance <- calc_variance(mtx)
+  try({variance <- calc_variance(mtx)})
   
   # group.size <- ncol(mtx)/2
   
   # var.groups.ratio <- median(matrixStats::rowVars(mtx[, 1:group.size], na.rm = TRUE)/matrixStats::rowVars(mtx[, (group.size+1):ncol(mtx)], na.rm = TRUE), na.rm = TRUE)
-  
-  prctPC1 <- prctPC2 <- bimodalityRowCorr <- bimodalityRowCorrSeed <- bimodalityColCorr <- bimodalityColCorrSeed <- 
-    linearCoefPoly2Row <- quadraticCoefPoly2Row <- coefHclustRows <- coefHclustRowsSeed <- NA
   
   # bimodalIndex 
   try({
@@ -320,7 +321,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   })
   
   mtx <- mtx %>% t()
-  mtx <- mtx[ , which(apply(mtx, 2, var, na.rm = TRUE) != 0)] # Remove zero variance columns 
+  mtx <- mtx[ , which(apply(mtx, 2, calc_variance) != 0)] # Remove zero variance columns 
   
   if (!is.vector(mtx)){
     try({
@@ -364,6 +365,43 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   return(resultvec)
 }
 
+getNaFeatures <- function(mtx) {
+  colNaPercentage <- colMeans(is.na(mtx))*100
+  rowNaPercentage <- rowMeans(is.na(mtx))*100
+  rowNonNaNumber <- rowSums(!is.na(mtx))
+  
+  colMeans <- colMeans(mtx, na.rm = TRUE)
+  rowMeans <- rowMeans(mtx, na.rm = TRUE)
+  
+  corSampleMeanNAPval <- corAnalyteMeanNAPval <- corSampleMeanNA <- corAnalyteMeanNA <- NA
+  corCoefType <- "spearman"
+  try({
+    cortestCol <- cor.test(colNaPercentage, colMeans, method = corCoefType)
+    corSampleMeanNAPval <- cortestCol$p.value
+    corSampleMeanNA <- unname(cortestCol$estimate)
+  })
+  
+  try({
+    cortestRow <- cor.test(rowNaPercentage, rowMeans, method = corCoefType)
+    corAnalyteMeanNAPval <- cortestRow$p.value
+    corAnalyteMeanNA <- unname(cortestRow$estimate)
+  })
+  
+  c(
+    minRowNonNaNumber = min(rowNonNaNumber),
+    maxRowNonNaNumber = max(rowNonNaNumber),
+    minRowNaPercentage = min(rowNaPercentage),            
+    maxRowNaPercentage = max(rowNaPercentage),
+    minColNaPercentage = min(colNaPercentage),
+    maxColNaPercentage = max(colNaPercentage),
+    percNATotal = mean(is.na(mtx)) * 100,
+    percOfRowsWithNAs = sum(apply(mtx, 1, anyNA))/nrow(mtx) * 100,
+    corSampleMeanNA = corSampleMeanNA,
+    corSampleMeanNAPval = corSampleMeanNAPval,
+    corAnalyteMeanNA = corAnalyteMeanNA,
+    corAnalyteMeanNAPval = corAnalyteMeanNAPval
+  )
+}
 
 getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
   
@@ -426,44 +464,6 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
   
   # c(naFeatures, characts.wNAs, characts.woNAs)
   c(naFeatures, characts.wNAs, nDistinctValues = nDistinctValues, nNegativeNumbers = nNegativeNumbers)
-}
-
-getNaFeatures <- function(mtx) {
-  colNaPercentage <- colMeans(is.na(mtx))*100
-  rowNaPercentage <- rowMeans(is.na(mtx))*100
-  rowNonNaNumber <- rowSums(!is.na(mtx))
-  
-  colMeans <- colMeans(mtx, na.rm = TRUE)
-  rowMeans <- rowMeans(mtx, na.rm = TRUE)
-  
-  corSampleMeanNAPval <- corAnalyteMeanNAPval <- corSampleMeanNA <- corAnalyteMeanNA <- NA
-  corCoefType <- "spearman"
-  try({
-    cortestCol <- cor.test(colNaPercentage, colMeans, method = corCoefType)
-    corSampleMeanNAPval <- cortestCol$p.value
-    corSampleMeanNA <- unname(cortestCol$estimate)
-  })
-  
-  try({
-    cortestRow <- cor.test(rowNaPercentage, rowMeans, method = corCoefType)
-    corAnalyteMeanNAPval <- cortestRow$p.value
-    corAnalyteMeanNA <- unname(cortestRow$estimate)
-  })
-  
-  c(
-    minRowNonNaNumber = min(rowNonNaNumber),
-    maxRowNonNaNumber = max(rowNonNaNumber),
-    minRowNaPercentage = min(rowNaPercentage),            
-    maxRowNaPercentage = max(rowNaPercentage),
-    minColNaPercentage = min(colNaPercentage),
-    maxColNaPercentage = max(colNaPercentage),
-    percNATotal = mean(is.na(mtx)) * 100,
-    percOfRowsWithNAs = sum(apply(mtx, 1, anyNA))/nrow(mtx) * 100,
-    corSampleMeanNA = corSampleMeanNA,
-    corSampleMeanNAPval = corSampleMeanNAPval,
-    corAnalyteMeanNA = corAnalyteMeanNA,
-    corAnalyteMeanNAPval = corAnalyteMeanNAPval
-  )
 }
 
 getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
