@@ -24,7 +24,6 @@ library(mlr3misc)
 #################################################################################
 # DATA CHARACTERISTICS
 
-
 # # Kolmogorov-Smirnov Test, 
 # # Returns percentage of significant samples when KS test was applied on single samples compared to all samples combined
 # kolSmirTestSignProp <- function(mtx) {
@@ -53,7 +52,6 @@ calc_entropy <- function(data, base=2, nbins=length(unique(c(data)))){
   return(-1*sum(entropy_vals))
 }
 
-
 calc_kurtosis <- function(data){
   n <- length(data[!is.na(data)])
   data <- data - mean(data, na.rm=TRUE)
@@ -70,7 +68,8 @@ calc_meanDeviation <- function(data){
 
 calc_skewness <- function (data){
   data <- data[!is.na(data)]
-  return(sum((data - mean(data))^3)/(length(data) * sd(data)^3))
+  # return(sum((data - mean(data))^3)/(length(data) * sd(data)^3))
+  return(sum((data - mean(data))^3)/(length(data) * calc_sd(data)^3))
 }
 
 calc_uniformity <- function(data, nbins=length(unique(c(data)))){
@@ -86,7 +85,11 @@ calc_variance <- function(data){
   # var(c(data), na.rm=TRUE) # was replaced because for single cell data large vectors can become a problem
   1/(sum(!is.na(data))-1)*sum((data-mean(data, na.rm = TRUE))^2, na.rm = TRUE) 
 }
-  
+
+calc_sd <- function(data){
+  sqrt(calc_variance(data))
+}
+
 calc_RMS <- function(data) sqrt(mean(data^2, na.rm=TRUE))
 
 applyFunctionWithSeed <- function(functionName, seed = 123,  ...){
@@ -111,7 +114,10 @@ applyFunctionWithSeed <- function(functionName, seed = 123,  ...){
 get_rowMeans <- function(mtx, ...) return(apply(mtx,1,mean,na.rm=T))
 
 # row standard deviations
-get_rowSd <- function(mtx, ...) return(apply(mtx,1,sd,na.rm=T))
+get_rowSd <- function(mtx, ...) {
+  # return(apply(mtx,1,sd,na.rm=T))
+  return(apply(mtx, 1, calc_sd))
+}
 
 # Pairwise pearson correlation of rows
 # For more than nmaxFeature feature a subset of nmaxFeatu random features is selected to speed up runtime. 
@@ -176,8 +182,6 @@ get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
   }
   return(list(res = res, seed = seedUsed))  
 }
-
-
 
 # Adjusted from BimodalIndex::bimodalIndex such that itmax can befined
 bimodalIndexWithIterDef <- function (dataset, verbose = TRUE, itmax = 10000, ...) {
@@ -255,7 +259,6 @@ get_coefHclustRows <- function(mtx, naToZero = FALSE, ...) {
   return(list(res = cluster::coef.hclust(amap::hcluster(mtx.tmp)), seed = seed))
 }
 
-
 getCharacteristicsHelper <- function(mtx, fast = TRUE){
   #KS.SignProp <- kolSmirTestSignProp(mtx)
   
@@ -282,7 +285,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     uniformity <- calc_uniformity(mtx) #
     RMS <- calc_RMS(mtx)
   }
-
+  
   variance <- calc_variance(mtx)
   
   # group.size <- ncol(mtx)/2
@@ -306,8 +309,8 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   })
   
   # Poly2 (features)
-  linearCoefPoly2Row <- try(get_LinearCoefPoly2XRowMeansYRowVars(mtx))
-  quadraticCoefPoly2Row <- try(get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
+  try(linearCoefPoly2Row <- get_LinearCoefPoly2XRowMeansYRowVars(mtx))
+  try(quadraticCoefPoly2Row <- get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
   
   # Coef.hclust (features)
   try({
@@ -318,7 +321,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   mtx <- mtx %>% t()
   mtx <- mtx[ , which(apply(mtx, 2, var, na.rm = TRUE) != 0)] # Remove zero variance columns 
-
+  
   if (!is.vector(mtx)){
     try({
       pca <- pcaMethods::pca(mtx, method="nipals", center = TRUE, maxSteps=5000)
@@ -347,7 +350,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     quadraticCoefPoly2Row = quadraticCoefPoly2Row,
     coefHclustRows = coefHclustRows,
     coefHclustRowsSeed = coefHclustRowsSeed
-    )
+  )
   
   if (!fast){
     resultvec <- c(resultvec, 
@@ -357,13 +360,13 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
                    RMS = RMS)
     
   }
-
+  
   return(resultvec)
 }
 
 
 getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
-
+  
   nNegativeNumbers <- sum(mtx < 0, na.rm = TRUE)
   if (takeLog2) mtx <- log2(mtx)
   mtx[mtx == "NaN"] <- NA
@@ -371,55 +374,55 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
   nDistinctValues <- length(unique(c(mtx[!is.na(mtx)])))
   naFeatures <- getNaFeatures(mtx)
   # if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
-
-
+  
+  
   # Positive correlation of pride datasets only due to LFQ?
   # Compare correlation when taking "Intensity " and "LFQ " columns for PXD020490/proteinGroups.txt
   #KS.SignProp <- kolSmirTestSignProp(as.matrix(df))
-
+  
   characts.wNAs <- getCharacteristicsHelper(mtx, fast = fast)
   names(characts.wNAs) <- paste0(names(characts.wNAs), ".wNAs")
-
-#   # Remove rows with NAs
-#   mtx <- mtx[rowSums(is.na(mtx)) == 0, ]
-#   
-#   if (is.vector(mtx)){
-#     nFeatures.woNAs <- 1
-#   } else {
-#     nFeatures.woNAs <- nrow(mtx) # number of proteins with no NAs
-#   }
-#   
-#   runCalculation <- TRUE
-#   if (is.vector(mtx) & length(mtx)>1){
-#     runCalculation <- FALSE
-#   } else {
-#     if (!is.vector(mtx) &  nFeatures.woNAs == 0){
-#       runCalculation <- FALSE
-#     } 
-#   }
-#   
-#   if (runCalculation) {
-#     characts.woNAs <- getCharacteristicsHelper(mtx, withNAs=FALSE)
-#   } else {
-#     characts.woNAs <- c(
-#       mean = NA,
-#       median = NA,
-#       min = NA,
-#       max = NA,
-#       medianSampleVariance = NA,
-#       medianAnalyteVariance = NA,
-#       entropy = NA,
-#       kurtosis = NA, 
-#       meanDeviation = NA,
-#       skewness = NA,
-#       uniformity = NA,
-#       variance = NA, 
-#       RMS = NA,
-#       prctPC1 = NA, 
-#       prctPC2 = NA)
-#   }
-#   
-#   names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
+  
+  #   # Remove rows with NAs
+  #   mtx <- mtx[rowSums(is.na(mtx)) == 0, ]
+  #   
+  #   if (is.vector(mtx)){
+  #     nFeatures.woNAs <- 1
+  #   } else {
+  #     nFeatures.woNAs <- nrow(mtx) # number of proteins with no NAs
+  #   }
+  #   
+  #   runCalculation <- TRUE
+  #   if (is.vector(mtx) & length(mtx)>1){
+  #     runCalculation <- FALSE
+  #   } else {
+  #     if (!is.vector(mtx) &  nFeatures.woNAs == 0){
+  #       runCalculation <- FALSE
+  #     } 
+  #   }
+  #   
+  #   if (runCalculation) {
+  #     characts.woNAs <- getCharacteristicsHelper(mtx, withNAs=FALSE)
+  #   } else {
+  #     characts.woNAs <- c(
+  #       mean = NA,
+  #       median = NA,
+  #       min = NA,
+  #       max = NA,
+  #       medianSampleVariance = NA,
+  #       medianAnalyteVariance = NA,
+  #       entropy = NA,
+  #       kurtosis = NA, 
+  #       meanDeviation = NA,
+  #       skewness = NA,
+  #       uniformity = NA,
+  #       variance = NA, 
+  #       RMS = NA,
+  #       prctPC1 = NA, 
+  #       prctPC2 = NA)
+  #   }
+  #   
+  #   names(characts.woNAs) <- paste0(names(characts.woNAs), ".woNAs")
   
   # c(naFeatures, characts.wNAs, characts.woNAs)
   c(naFeatures, characts.wNAs, nDistinctValues = nDistinctValues, nNegativeNumbers = nNegativeNumbers)
@@ -446,7 +449,7 @@ getNaFeatures <- function(mtx) {
     corAnalyteMeanNAPval <- cortestRow$p.value
     corAnalyteMeanNA <- unname(cortestRow$estimate)
   })
-
+  
   c(
     minRowNonNaNumber = min(rowNonNaNumber),
     maxRowNonNaNumber = max(rowNonNaNumber),
@@ -468,7 +471,7 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
   mtx[mtx == 0] <- NA
   mtx[mtx == Inf] <- NA
   mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
-
+  
   nSamples <- ncol(mtx)
   nAnalytes <- nrow(mtx)
   
@@ -562,7 +565,7 @@ readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
     "FDR",
     "p value",
     "Adjusted p value"
-    )
+  )
   
   metabolite_identification <- dat$metabolite_identification
   dat <- dat[, colnames(dat) %notin% remove]
@@ -598,8 +601,8 @@ readInAllMetabolightsFiles <- function(dataTypePath, lst = list(), zerosToNA = F
         # if (!is.vector(mtx)) {
         if (!is.vector(mtx) & ((sum(mtx < 0, na.rm = TRUE) / length(mtx)) < 0.01)) {
           if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, 
-                                                                        datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", basename(file))), 
-                                                                        dataType=dataTypePath))
+                                                                                       datasetID=gsub(" ", "_", paste0(basename(dataTypeFilePath), "_", basename(file))), 
+                                                                                       dataType=dataTypePath))
         }
       })
     }
@@ -631,7 +634,7 @@ readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FA
     geneId <- dat[, rowLabelCol]
     colsToRemove <- c(colsToRemove, colnames(dat)[rowLabelCol])
   }
-    
+  
   dat <- data.frame(dat[, setdiff(colnames(dat), colsToRemove)])
   mtx <- as.matrix(dat)
   dat <- NULL
@@ -693,7 +696,7 @@ readInMaxQuantFiles <- function (filePath, quantColPattern = c("^LFQ ", "^iBAQ "
   fieldnames <- c("proteinDescription", "idScore", "isDecoy",
                   "nbPeptides", "isFiltered", "isPotential.contaminant",
                   "isIdentified.by.site")
-
+  
   if (identical(grep(annotations[6], colnames(dat), value = TRUE), character(0))){
     bool1 <- logical(length = 0)
   } else {
@@ -732,7 +735,7 @@ readInMaxQuantFiles <- function (filePath, quantColPattern = c("^LFQ ", "^iBAQ "
 
 getDataCharacteristicsForDataType <- function(dataType) {
   print(dataType)
-
+  
   lst <- list()
   path <- "./"
   dataTypePath <- paste0(path, dataType)
@@ -861,6 +864,8 @@ getDataCharacteristicsForDataType <- function(dataType) {
 }
 
 dataTypes <- c(
+  "sc_normalized",
+  "sc_unnormalized",
   "scProteomics",
   "metabolomics_NMR", "metabolomics_MS", 
   "proteomics_expressionatlas", "proteomics_pride",
@@ -869,9 +874,7 @@ dataTypes <- c(
   "RNAseq_raw", "RNAseq_raw_undecorated", 
   # "RNAseq_transcripts_tpms",
   # "RNAseq_transcripts_raw_undecorated",
-  "microarray",
-  "sc_normalized",
-  "sc_unnormalized"
+  "microarray"
 )
 
 # path <- "exampleFiles/"
