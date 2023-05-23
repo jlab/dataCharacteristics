@@ -19,6 +19,7 @@ library(cluster)
 library(amap)
 library(mclust)
 library(mlr3misc)
+library(biglm)
 
 `%notin%` <- Negate(`%in%`)
 #################################################################################
@@ -111,7 +112,7 @@ applyFunctionWithSeed <- function(functionName, seed = 123,  ...){
 }
 
 # row means 
-get_rowMeans <- function(mtx, ...) return(apply(mtx,1,mean,na.rm=T))
+get_rowMeans <- function(mtx, ...) return(apply(mtx, 1, mean, na.rm = TRUE))
 
 # row standard deviations
 get_rowSd <- function(mtx, ...) {
@@ -119,39 +120,7 @@ get_rowSd <- function(mtx, ...) {
   return(apply(mtx, 1, calc_sd))
 }
 
-# Pairwise pearson correlation of rows
-# For more than nmaxFeature feature a subset of nmaxFeatu random features is selected to speed up runtime. 
-get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman",...){
-  res <- seedUsed <- NA
-  
-  if (nrow(mtx)>nmaxFeature){ # random subset of features are selected
-    randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)), ...)
-    seedUsed <- randomRows$seed
-    mtx.sub <- mtx[randomRows$res,]
-    res <- cor(t(mtx.sub), method = corMethod, use = "pairwise.complete.obs")
-  } else {
-    res <- cor(t(mtx), method = corMethod, use = "pairwise.complete.obs")
-  }
-  
-  return(list(res = res, seed = seedUsed))  
-}
-
-# pairwise pearson correlation of columns
-get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
-  res <- seed <- NA
-  if (nrow(mtx) > nmaxSamples){ # random subset of features are selected
-    randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)), ...)
-    mtx.sub <- mtx[, randomCols]
-    res <- cor(mtx.sub, method = corMethod, use = "pairwise.complete.obs")
-  } else {
-    res <- cor(mtx, method = corMethod, use = "pairwise.complete.obs")
-  }
-  return(list(res = res, seed = seed))  
-  #return(dis <- cor(mtx, mtx, method = corMethod, use = "pairwise.complete.obs"))
-}
-
-
-# Pairwise pearson correlation of rows
+# Pairwise correlation of rows
 # For more than nmaxFeature feature a subset of nmaxFeatu random features is selected to speed up runtime. 
 get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman", ...){
   res <- seedUsed <- NA
@@ -168,7 +137,7 @@ get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman", ...){
   return(list(res = res, seed = seedUsed))  
 }
 
-# pairwise pearson correlation of columns
+# pairwise correlation of columns
 get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
   res <- seedUsed <- NA
   
@@ -234,16 +203,52 @@ get_bimodalityColCorr <- function(mtx, naToZero = FALSE, ...) {
 # Poly2 (features)
 # linear coefficient of 2nd order polynomial fit with x = row means, y = row variances
 get_LinearCoefPoly2XRowMeansYRowVars <- function(mtx, ...){
-  return(unname(lm(y~x+I(x^2), data=data.frame(
+  # return(unname(lm(y~x+I(x^2), data=data.frame(
+  #   y=get_rowSd(mtx)^2,
+  #   x=get_rowMeans(mtx)))$coefficients[2]))
+  return(unname(coef(biglm::biglm(y~x+I(x^2), data=data.frame(
     y=get_rowSd(mtx)^2,
-    x=get_rowMeans(mtx)))$coefficients[2]))
+    x=get_rowMeans(mtx))))[2]))
 }
 
 # quadratic coefficient of 2rd order polynomial fit with x = row means, y = row variances
 get_QuadraticCoefPoly2XRowMeansYRowVars <- function(mtx, ...){ 
-  return(unname(lm(y~x+I(x^2), data=data.frame(
+  # return(unname(lm(y~x+I(x^2), data=data.frame(
+  #   y=get_rowSd(mtx)^2,
+  #   x=get_rowMeans(mtx)))$coefficients[3]))
+  return(unname(coef(biglm::biglm(y~x+I(x^2), data=data.frame(
     y=get_rowSd(mtx)^2,
-    x=get_rowMeans(mtx)))$coefficients[3]))
+    x=get_rowMeans(mtx))))[3]))
+}
+
+# linear and quadratic coefficient of 2rd order polynomial fit with x = row means, y = row variances
+get_CoefPoly2XRowMeansYRowVars <- function(mtx, ...){ 
+  # coefs <- lm(y~x+I(x^2), data=data.frame(
+  #   y=get_rowSd(mtx)^2,
+  #   x=get_rowMeans(mtx)))$coefficients
+  
+  # model <- biglm::biglm(y~x+I(x^2), data=data.frame(
+  #   y=get_rowSd(mtx)^2,
+  #   x=get_rowMeans(mtx)))
+  
+  rowSd <- rowMean <- linearCoef <- quadraticCoef <- NA
+  try({rowSd <- get_rowSd(mtx)^2})
+  try({rowMean <- get_rowMeans(mtx)})
+  
+  try({ 
+    if (!(length(rowSd) == 1 & is.na(rowSd)) & 
+      !(length(rowMean) == 1 & is.na(rowMean))) {
+    df <- data.frame(
+      y=rowSd,
+      x=rowMean)
+    model <- biglm::biglm(y~x+I(x^2), data=df)
+    coefs <- coef(model)
+    linearCoef <- unname(coefs[2])
+    quadraticCoef <- unname(coefs[3])
+    }
+  })
+
+  return(list(linearCoef = linearCoef, quadraticCoef = quadraticCoef))
 }
 
 # Coef.hclust (features)
@@ -275,7 +280,8 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   medianSampleVariance <- medianAnalyteVariance <- skewness <- kurtosis <- variance <-
     prctPC1 <- prctPC2 <- bimodalityRowCorr <- bimodalityRowCorrSeed <- bimodalityColCorr <- bimodalityColCorrSeed <- 
-    linearCoefPoly2Row <- quadraticCoefPoly2Row <- coefHclustRows <- coefHclustRowsSeed <- NA
+    # linearCoefPoly2Row <- quadraticCoefPoly2Row <- 
+    coefHclustRows <- coefHclustRowsSeed <- NA
   
   try({medianSampleVariance <- median(apply(mtx, 2, calc_variance), na.rm = TRUE)})
   try({medianAnalyteVariance <- median(unname(apply(mtx, 1, calc_variance)), na.rm = TRUE)})
@@ -310,8 +316,13 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   })
   
   # Poly2 (features)
-  try(linearCoefPoly2Row <- get_LinearCoefPoly2XRowMeansYRowVars(mtx))
-  try(quadraticCoefPoly2Row <- get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
+  # try(linearCoefPoly2Row <- get_LinearCoefPoly2XRowMeansYRowVars(mtx))
+  # try(quadraticCoefPoly2Row <- get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
+  try({
+    coefs <- get_CoefPoly2XRowMeansYRowVars(mtx)
+    linearCoefPoly2Row <- coefs[["linearCoef"]]
+    quadraticCoefPoly2Row <- coefs[["quadraticCoef"]]
+  })
   
   # Coef.hclust (features)
   try({
