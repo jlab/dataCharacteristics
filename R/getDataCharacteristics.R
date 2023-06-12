@@ -128,8 +128,7 @@ get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman", ...){
   if (nrow(mtx)>nmaxFeature){ # random subset of features are selected
     randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)), ...)
     seedUsed <- randomRows$seed
-    mtx.sub <- mtx[randomRows$res,]
-    res <- cor(t(mtx.sub), method = corMethod, use = "pairwise.complete.obs")
+    res <- cor(t(mtx[randomRows$res,]), method = corMethod, use = "pairwise.complete.obs")
   } else {
     res <- cor(t(mtx), method = corMethod, use = "pairwise.complete.obs")
   }
@@ -144,8 +143,7 @@ get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
   if (nrow(mtx) > nmaxSamples){ # random subset of features are selected
     randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)),  ...)
     seedUsed <- randomCols$seed
-    mtx.sub <- mtx[, randomCols$res]
-    res <- cor(mtx.sub, method = corMethod, use = "pairwise.complete.obs")
+    res <- cor(mtx[, randomCols$res], method = corMethod, use = "pairwise.complete.obs")
   } else {
     res <- cor(mtx, method = corMethod, use = "pairwise.complete.obs")
   }
@@ -280,7 +278,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   medianSampleVariance <- medianAnalyteVariance <- skewness <- kurtosis <- variance <-
     prctPC1 <- prctPC2 <- bimodalityRowCorr <- bimodalityRowCorrSeed <- bimodalityColCorr <- bimodalityColCorrSeed <- 
-    # linearCoefPoly2Row <- quadraticCoefPoly2Row <- 
+    linearCoefPoly2Row <- quadraticCoefPoly2Row <- 
     coefHclustRows <- coefHclustRowsSeed <- NA
   
   try({medianSampleVariance <- median(apply(mtx, 2, calc_variance), na.rm = TRUE)})
@@ -309,20 +307,26 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     bimodalityRowCorrSeed <- bimodalityRowCorrRes$seed
   })
   
+  gc()
+  
   try({
     bimodalityColCorrRes <- get_bimodalityColCorr(mtx, naToZero = TRUE)
     bimodalityColCorr <- bimodalityColCorrRes$res
     bimodalityColCorrSeed <- bimodalityColCorrRes$seed
   })
   
-  # Poly2 (features)
-  # try(linearCoefPoly2Row <- get_LinearCoefPoly2XRowMeansYRowVars(mtx))
-  # try(quadraticCoefPoly2Row <- get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
-  try({
-    coefs <- get_CoefPoly2XRowMeansYRowVars(mtx)
-    linearCoefPoly2Row <- coefs[["linearCoef"]]
-    quadraticCoefPoly2Row <- coefs[["quadraticCoef"]]
-  })
+  gc()
+  
+  # # Poly2 (features)
+  # # try(linearCoefPoly2Row <- get_LinearCoefPoly2XRowMeansYRowVars(mtx))
+  # # try(quadraticCoefPoly2Row <- get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
+  # try({
+  #   coefs <- get_CoefPoly2XRowMeansYRowVars(mtx)
+  #   linearCoefPoly2Row <- coefs[["linearCoef"]]
+  #   quadraticCoefPoly2Row <- coefs[["quadraticCoef"]]
+  # })
+  # 
+  # gc()
   
   # Coef.hclust (features)
   try({
@@ -330,6 +334,8 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     coefHclustRows <- coefHclustRowsRes$res
     coefHclustRowsSeed <- coefHclustRowsRes$seed
   })
+  
+  gc()
   
   mtx <- mtx %>% t()
   mtx <- mtx[ , which(apply(mtx, 2, calc_variance) != 0)] # Remove zero variance columns 
@@ -341,6 +347,8 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
       prctPC2 <- pca@R2[2]
     })
   }
+  
+  gc()
   
   resultvec <- c(
     mean = mean,
@@ -358,8 +366,8 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     bimodalityRowCorrSeed = bimodalityRowCorrSeed,
     bimodalityColCorr = bimodalityColCorr,
     bimodalityColCorrSeed = bimodalityColCorrSeed,
-    linearCoefPoly2Row = linearCoefPoly2Row,
-    quadraticCoefPoly2Row = quadraticCoefPoly2Row,
+    # linearCoefPoly2Row = linearCoefPoly2Row,
+    # quadraticCoefPoly2Row = quadraticCoefPoly2Row,
     coefHclustRows = coefHclustRows,
     coefHclustRowsSeed = coefHclustRowsSeed
   )
@@ -851,6 +859,9 @@ getDataCharacteristicsForDataType <- function(dataType) {
       if (!is.vector(mtx)) {
         if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
       }
+      mtx <- NULL
+      
+      gc()
     }
   } else if (dataType == "scProteomics"){
     dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
