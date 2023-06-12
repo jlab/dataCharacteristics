@@ -516,8 +516,10 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test", ignor
                     # charact.noLog, 
                     charact.log)))
     saveRDS(lst,file=rdsName)
+
+    session <- sessionInfo()
     sink(sub(".RDS",".log",rdsName))
-    sessionInfo()
+    print(session)
     sink()
   }
   
@@ -867,19 +869,25 @@ getDataCharacteristicsForDataType <- function(dataType) {
   } else if (dataType %in% c("sc_normalized", "sc_unnormalized")){
     dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
     for (dataTypeFilePath in dataTypeFilePaths){
-      print(dataTypeFilePath)
-      ## Open MatrixMarket file
-      # library(Matrix)
-      mtx <- Matrix::readMM(dataTypeFilePath)
-      mtx <- as.matrix(mtx)
-      mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
-      # Skip datasets if they contain more than 1% negative numbers
-      if (!is.vector(mtx)) {
-        if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=gsub(" ", "_", basename(dataTypeFilePath)), dataType=dataTypePath))
-      }
-      mtx <- NULL
+      datasetID <- gsub(" ", "_", basename(dataTypeFilePath))
+      rdsName <- paste0("Results/", dataTypePath, "__", datasetID, ".RDS")
       
-      gc()
+      ## Load if already calcuated  
+      if(!file.exists(rdsName)){
+        print(dataTypeFilePath)
+        ## Open MatrixMarket file
+        # library(Matrix)
+        mtx <- Matrix::readMM(dataTypeFilePath)
+        mtx <- as.matrix(mtx)
+        mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
+        # Skip datasets if they contain more than 1% negative numbers
+        if (!is.vector(mtx)) {
+          if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=datasetID, dataType=dataTypePath))
+        }
+        mtx <- NULL
+        
+        gc()
+      }
     }
   } else if (dataType == "scProteomics"){
     dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
@@ -904,8 +912,6 @@ getDataCharacteristicsForDataType <- function(dataType) {
 }
 
 dataTypes <- c(
-  "sc_normalized",
-  "sc_unnormalized",
   "scProteomics",
   "metabolomics_NMR", "metabolomics_MS", 
   "proteomics_expressionatlas", "proteomics_pride",
@@ -914,7 +920,9 @@ dataTypes <- c(
   "RNAseq_raw", "RNAseq_raw_undecorated", 
   # "RNAseq_transcripts_tpms",
   # "RNAseq_transcripts_raw_undecorated",
-  "microarray"
+  "microarray",
+  "sc_normalized",
+  "sc_unnormalized"
 )
 
 # path <- "exampleFiles/"
