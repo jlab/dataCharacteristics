@@ -317,16 +317,16 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   gc()
   
-  # # Poly2 (features)
-  # # try(linearCoefPoly2Row <- get_LinearCoefPoly2XRowMeansYRowVars(mtx))
-  # # try(quadraticCoefPoly2Row <- get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
-  # try({
-  #   coefs <- get_CoefPoly2XRowMeansYRowVars(mtx)
-  #   linearCoefPoly2Row <- coefs[["linearCoef"]]
-  #   quadraticCoefPoly2Row <- coefs[["quadraticCoef"]]
-  # })
-  # 
-  # gc()
+  # Poly2 (features)
+  # try(linearCoefPoly2Row <- get_LinearCoefPoly2XRowMeansYRowVars(mtx))
+  # try(quadraticCoefPoly2Row <- get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
+  try({
+    coefs <- get_CoefPoly2XRowMeansYRowVars(mtx)
+    linearCoefPoly2Row <- coefs[["linearCoef"]]
+    quadraticCoefPoly2Row <- coefs[["quadraticCoef"]]
+  })
+
+  gc()
   
   # Coef.hclust (features)
   try({
@@ -366,8 +366,8 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     bimodalityRowCorrSeed = bimodalityRowCorrSeed,
     bimodalityColCorr = bimodalityColCorr,
     bimodalityColCorrSeed = bimodalityColCorrSeed,
-    # linearCoefPoly2Row = linearCoefPoly2Row,
-    # quadraticCoefPoly2Row = quadraticCoefPoly2Row,
+    linearCoefPoly2Row = linearCoefPoly2Row,
+    quadraticCoefPoly2Row = quadraticCoefPoly2Row,
     coefHclustRows = coefHclustRows,
     coefHclustRowsSeed = coefHclustRowsSeed
   )
