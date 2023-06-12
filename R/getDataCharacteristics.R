@@ -235,17 +235,17 @@ get_CoefPoly2XRowMeansYRowVars <- function(mtx, ...){
   
   try({ 
     if (!(length(rowSd) == 1 & is.na(rowSd)) & 
-      !(length(rowMean) == 1 & is.na(rowMean))) {
-    df <- data.frame(
-      y=rowSd,
-      x=rowMean)
-    model <- biglm::biglm(y~x+I(x^2), data=df)
-    coefs <- coef(model)
-    linearCoef <- unname(coefs[2])
-    quadraticCoef <- unname(coefs[3])
+        !(length(rowMean) == 1 & is.na(rowMean))) {
+      df <- data.frame(
+        y=rowSd,
+        x=rowMean)
+      model <- biglm::biglm(y~x+I(x^2), data=df)
+      coefs <- coef(model)
+      linearCoef <- unname(coefs[2])
+      quadraticCoef <- unname(coefs[3])
     }
   })
-
+  
   return(list(linearCoef = linearCoef, quadraticCoef = quadraticCoef))
 }
 
@@ -485,25 +485,43 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
   c(naFeatures, characts.wNAs, nDistinctValues = nDistinctValues, nNegativeNumbers = nNegativeNumbers)
 }
 
-getDataCharacteristics <- function(mtx, datasetID="test", dataType="test") {
+getDataCharacteristics <- function(mtx, datasetID="test", dataType="test", ignoreRDS=FALSE) {
+  resultName <- paste0(dataType,"__",datasetID)
   
-  mtx[mtx == 0] <- NA
-  mtx[mtx == Inf] <- NA
-  mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
+  dir.create("Results",showWarnings = F)
+  rdsName <- paste0("Results/",resultName,".RDS")
+
+  ## Load if already calcuated  
+  if(file.exists(rdsName) && !ignoreRDS){
+    lst <- readRDS(file=rdsName)
   
-  nSamples <- ncol(mtx)
-  nAnalytes <- nrow(mtx)
+    
+  ## Calculate and save if already calcuated:
+  }else{
+    mtx[mtx == 0] <- NA
+    mtx[mtx == Inf] <- NA
+    mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
+    
+    nSamples <- ncol(mtx)
+    nAnalytes <- nrow(mtx)
+    
+    # charact.noLog <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = FALSE)
+    # names(charact.noLog) <- paste0(names(charact.noLog), ".noLog2")
+    charact.log <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = TRUE)
+    names(charact.log) <- paste0(names(charact.log), ".log2")
+    
+    lst <- list(c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
+                  c(nSamples = nSamples, 
+                    nAnalytes = nAnalytes,
+                    # charact.noLog, 
+                    charact.log)))
+    saveRDS(lst,file=rdsName)
+    sink(sub(".RDS",".log",rdsName))
+    sessionInfo()
+    sink()
+  }
   
-  # charact.noLog <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = FALSE)
-  # names(charact.noLog) <- paste0(names(charact.noLog), ".noLog2")
-  charact.log <- getDataCharacteristicsLogNoLog(mtx, takeLog2 = TRUE)
-  names(charact.log) <- paste0(names(charact.log), ".log2")
-  
-  list(c(list(datasetID = datasetID, dataType = gsub("^\\./", "", dataType)), 
-         c(nSamples = nSamples, 
-           nAnalytes = nAnalytes,
-           # charact.noLog, 
-           charact.log)))
+  return(lst)
 }
 ################################################################################
 
