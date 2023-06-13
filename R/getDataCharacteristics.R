@@ -20,6 +20,8 @@ library(amap)
 library(mclust)
 library(mlr3misc)
 library(biglm)
+library(reshape2)
+library(speedglm)
 
 `%notin%` <- Negate(`%in%`)
 #################################################################################
@@ -140,7 +142,7 @@ get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman", ...){
 get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
   res <- seedUsed <- NA
   
-  if (nrow(mtx) > nmaxSamples){ # random subset of features are selected
+  if (ncol(mtx) > nmaxSamples){ # random subset of features are selected
     randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)),  ...)
     seedUsed <- randomCols$seed
     res <- cor(mtx[, randomCols$res], method = corMethod, use = "pairwise.complete.obs")
@@ -250,7 +252,6 @@ get_CoefPoly2XRowMeansYRowVars <- function(mtx, ...){
 }
 
 # Coef.hclust (features)
-#h cluster coefficient rows
 get_coefHclustRows <- function(mtx, naToZero = FALSE, ...) {
   if (naToZero) mtx[is.na(mtx)] <- 0
   mtx.tmp <- mtx[order(rowSums(is.na(mtx))), ]
@@ -261,6 +262,66 @@ get_coefHclustRows <- function(mtx, naToZero = FALSE, ...) {
   mtx.tmp <- mtx.tmp[randomRows$res, randomCols$res] # max. 500 features and samples
   return(list(res = cluster::coef.hclust(amap::hcluster(mtx.tmp)), seed = seed))
 }
+
+calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
+  
+  seedUsed <- NA
+  if (ncol(mtx) > nmaxSamples){ # random subset of features are selected
+    randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)),  ...)
+    seedUsed <- randomCols$seed
+    mtx <- mtx[, randomCols$res]
+  }
+  
+  data.long <- reshape2::melt(mtx)
+  colnames(data.long) <- c("Feature", "Sample", "Value")
+  data.long$isNA <- as.integer(is.na(data.long$Value))
+  
+  # Group by mean using dplyr
+  featureMean.df <- data.long %>% dplyr::group_by(Feature) %>% 
+    dplyr::summarise(mean=mean(Value, na.rm=TRUE))
+  
+  imputed <- data.long$Value
+  
+  data.long <- data.long %>% dplyr::left_join(featureMean.df, by='Feature')
+  imputed[is.na(imputed)] <- data.long$mean[is.na(imputed)]
+  data.long$imputed <- imputed
+  
+  
+  x5090.lst <- lapply(unique(data.long$Sample), function(sample){
+    data.long.Sample <- data.long %>% dplyr::filter(Sample == sample)
+    glmModelSample <- speedglm::speedglm(isNA ~ imputed, 
+                                         family=binomial(link='logit'), 
+                                         data = data.long.Sample, fitted = TRUE)
+    
+    intensities <- seq(-20, max(data.long$imputed), length.out=200)
+    approx(predict(glmModelSample, 
+                   newdata=data.frame(imputed=intensities),
+                   type="response"), intensities, c(0.5, 0.9))$y
+  })
+  
+  # x5090.lst2 <- list()
+  # for (sample in unique(data.long$Sample)){
+  #   x5090 <- NULL
+  #   data.long.Sample <- data.long %>% dplyr::filter(Sample == sample)
+  #   glmModelSample <- speedglm::speedglm(isNA ~ imputed,
+  #                                        family=binomial(link='logit'),
+  #                                        data = data.long.Sample, fitted = TRUE)
+  # 
+  #   intensities <- seq(-20, max(data.long$imputed), length.out=200)
+  #   x5090 <- approx(predict(glmModelSample, newdata=data.frame(imputed=intensities),type="response"),intensities, c(0.5, 0.9))$y
+  #   x5090.lst2 <- append(x5090.lst2, list(x5090))
+  # }
+  
+  x5090.df <- do.call(rbind, x5090.lst)
+  colnames(x5090.df) <- c("IntensityNAp50", "IntensityNAp90")
+  x5090.sds <- apply(x5090.df, 2, calc_sd)
+  
+  list(IntensityNAp50 = x5090.sds[["IntensityNAp50"]], 
+       IntensityNAp90 = x5090.sds[["IntensityNAp90"]],
+       seed = seedUsed
+  )
+}
+
 
 getCharacteristicsHelper <- function(mtx, fast = TRUE){
   #KS.SignProp <- kolSmirTestSignProp(mtx)
@@ -279,7 +340,8 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   medianSampleVariance <- medianAnalyteVariance <- skewness <- kurtosis <- variance <-
     prctPC1 <- prctPC2 <- bimodalityRowCorr <- bimodalityRowCorrSeed <- bimodalityColCorr <- bimodalityColCorrSeed <- 
     linearCoefPoly2Row <- quadraticCoefPoly2Row <- 
-    coefHclustRows <- coefHclustRowsSeed <- NA
+    coefHclustRows <- coefHclustRowsSeed <- 
+    intensityNAProbability50.sd <- intensityNAProbability90.sd <- intensityNAProbabilitySeed <- NA
   
   try({medianSampleVariance <- median(apply(mtx, 2, calc_variance), na.rm = TRUE)})
   try({medianAnalyteVariance <- median(unname(apply(mtx, 1, calc_variance)), na.rm = TRUE)})
@@ -337,6 +399,17 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   gc()
   
+  
+  try({
+    x5090.sds <- calculateIntensityNAProbability5090(mtx)
+    intensityNAProbability50.sd <- x5090.sds[["IntensityNAp50"]]
+    intensityNAProbability90.sd <- x5090.sds[["IntensityNAp90"]]
+    intensityNAProbabilitySeed <- x5090.sds[["seed"]]
+  })
+  
+  gc()
+  
+  
   mtx <- mtx %>% t()
   mtx <- mtx[ , which(apply(mtx, 2, calc_variance) != 0)] # Remove zero variance columns 
   
@@ -369,7 +442,10 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     linearCoefPoly2Row = linearCoefPoly2Row,
     quadraticCoefPoly2Row = quadraticCoefPoly2Row,
     coefHclustRows = coefHclustRows,
-    coefHclustRowsSeed = coefHclustRowsSeed
+    coefHclustRowsSeed = coefHclustRowsSeed,
+    intensityNAProbability50.sd = intensityNAProbability50.sd,
+    intensityNAProbability90.sd = intensityNAProbability90.sd,
+    intensityNAProbabilitySeed = intensityNAProbabilitySeed
   )
   
   if (!fast){
