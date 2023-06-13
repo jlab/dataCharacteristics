@@ -24,6 +24,16 @@ library(reshape2)
 library(speedglm)
 
 `%notin%` <- Negate(`%in%`)
+
+removeEmptyRowsAndColumns <- function(mtx, zerosToNA = FALSE){
+  if (zerosToNA) mtx[mtx == 0] <- NA
+  mtx[mtx %in% c("NaN", "N/A", "<-->")] <- NA
+  # remove rows with only NAs
+  # mtx <- mtx[rowSums(is.na(mtx) | mtx == 0) != ncol(mtx), ]
+  mtx <- subset(mtx, rowSums(is.na(mtx) | mtx == 0) != ncol(mtx))
+  if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
+  mtx
+}
 #################################################################################
 # DATA CHARACTERISTICS
 
@@ -130,11 +140,11 @@ get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman", ...){
   if (nrow(mtx)>nmaxFeature){ # random subset of features are selected
     randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)), ...)
     seedUsed <- randomRows$seed
-    res <- cor(t(mtx[randomRows$res,]), method = corMethod, use = "pairwise.complete.obs")
-  } else {
-    res <- cor(t(mtx), method = corMethod, use = "pairwise.complete.obs")
-  }
+    mtx <- removeEmptyRowsAndColumns(mtx[randomRows$res,], zerosToNA = TRUE)
+  } 
   
+  res <- cor(t(mtx), method = corMethod, use = "pairwise.complete.obs")
+
   return(list(res = res, seed = seedUsed))  
 }
 
@@ -145,10 +155,9 @@ get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
   if (ncol(mtx) > nmaxSamples){ # random subset of features are selected
     randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)),  ...)
     seedUsed <- randomCols$seed
-    res <- cor(mtx[, randomCols$res], method = corMethod, use = "pairwise.complete.obs")
-  } else {
-    res <- cor(mtx, method = corMethod, use = "pairwise.complete.obs")
-  }
+    mtx <- removeEmptyRowsAndColumns(mtx[, randomCols$res], zerosToNA = TRUE)
+  } 
+  res <- cor(mtx, method = corMethod, use = "pairwise.complete.obs")
   return(list(res = res, seed = seedUsed))  
 }
 
@@ -260,6 +269,8 @@ get_coefHclustRows <- function(mtx, naToZero = FALSE, ...) {
   seed <- randomCols$seed
   randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(500, nrow(mtx)), seed = seed, ...)
   mtx.tmp <- mtx.tmp[randomRows$res, randomCols$res] # max. 500 features and samples
+  
+  mtx.tmp <- removeEmptyRowsAndColumns(mtx.tmp, zerosToNA = TRUE)
   return(list(res = cluster::coef.hclust(amap::hcluster(mtx.tmp)), seed = seed))
 }
 
@@ -270,6 +281,7 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
     randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)),  ...)
     seedUsed <- randomCols$seed
     mtx <- mtx[, randomCols$res]
+    mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
   }
   
   data.long <- reshape2::melt(mtx)
@@ -602,16 +614,6 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test", ignor
   return(lst)
 }
 ################################################################################
-
-removeEmptyRowsAndColumns <- function(mtx, zerosToNA = FALSE){
-  if (zerosToNA) mtx[mtx == 0] <- NA
-  mtx[mtx %in% c("NaN", "N/A", "<-->")] <- NA
-  # remove rows with only NAs
-  # mtx <- mtx[rowSums(is.na(mtx) | mtx == 0) != ncol(mtx), ]
-  mtx <- subset(mtx, rowSums(is.na(mtx) | mtx == 0) != ncol(mtx))
-  if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
-  mtx
-}
 
 
 readInMetabolightsFiles <- function(filePath, zerosToNA = FALSE) {
