@@ -135,7 +135,7 @@ get_rowSd <- function(mtx, ...) {
 
 # Pairwise correlation of rows
 # For more than nmaxFeature feature a subset of nmaxFeatu random features is selected to speed up runtime. 
-get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman", ...){
+get_rowCorr <- function(mtx, nmaxFeature=1000, corMethod = "spearman", ...){
   res <- seedUsed <- NA
   
   if (nrow(mtx)>nmaxFeature){ # random subset of features are selected
@@ -150,7 +150,7 @@ get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman", ...){
 }
 
 # pairwise correlation of columns
-get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
+get_colCorr <- function(mtx, nmaxSamples=1000, corMethod = "spearman", ...){
   res <- seedUsed <- NA
   
   if (ncol(mtx) > nmaxSamples){ # random subset of features are selected
@@ -262,17 +262,16 @@ get_CoefPoly2XRowMeansYRowVars <- function(mtx, ...){
 }
 
 # Coef.hclust (features)
-get_coefHclustRows <- function(mtx, naToZero = FALSE, ...) {
-  if (naToZero) mtx[is.na(mtx)] <- 0
-  mtx.tmp <- mtx[order(rowSums(is.na(mtx))), ]
-  # mtx.tmp <- mtx.tmp[1:min(500,dim(mtx)[1]),1:min(500,dim(mtx)[2])] # max. 500 features and samples
-  randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(500, ncol(mtx)))
-  seed <- randomCols$seed
-  randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(500, nrow(mtx)), seed = seed)
-  mtx.tmp <- mtx.tmp[randomRows$res, randomCols$res] # max. 500 features and samples
+get_coefHclustRowsWithFewestNAs <- function(mtx, naToZero = FALSE, nMax = 500, ...) {
+  mtx <- mtx[order(rowSums(is.na(mtx)), -rowMeans(mtx, na.rm = TRUE)), ]
   
-  mtx.tmp <- removeEmptyRowsAndColumns(mtx.tmp, zerosToNA = FALSE)
-  return(list(res = cluster::coef.hclust(amap::hcluster(mtx.tmp)), seed = seed))
+  mtx <- mtx[order(rowMeans(mtx, na.rm = TRUE)), ]
+  mtx <- mtx[order(rowSums(is.na(mtx))), ]
+  if (naToZero) mtx[is.na(mtx)] <- 0
+  randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nMax, ncol(mtx)))
+  mtx <- mtx[1:min(500, nrow(mtx)), randomCols$res] # max. 500 features and samples
+  mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = FALSE)
+  return(list(res = cluster::coef.hclust(amap::hcluster(mtx)), seed = randomCols$seed))
 }
 
 calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
@@ -405,7 +404,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   # Coef.hclust (features)
   try({
-    coefHclustRowsRes <- get_coefHclustRows(mtx, naToZero = TRUE)
+    coefHclustRowsRes <- get_coefHclustRowsWithFewestNAs(mtx, naToZero = TRUE)
     coefHclustRows <- coefHclustRowsRes$res
     coefHclustRowsSeed <- coefHclustRowsRes$seed
   })
