@@ -34,6 +34,7 @@ removeEmptyRowsAndColumns <- function(mtx, zerosToNA = FALSE){
   if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
   mtx
 }
+
 #################################################################################
 # DATA CHARACTERISTICS
 
@@ -138,7 +139,7 @@ get_rowCorr <- function(mtx, nmaxFeature=100, corMethod = "spearman", ...){
   res <- seedUsed <- NA
   
   if (nrow(mtx)>nmaxFeature){ # random subset of features are selected
-    randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)), ...)
+    randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(nmaxFeature, nrow(mtx)))
     seedUsed <- randomRows$seed
     mtx <- removeEmptyRowsAndColumns(mtx[randomRows$res,], zerosToNA = TRUE)
   } 
@@ -153,7 +154,7 @@ get_colCorr <- function(mtx, nmaxSamples=100, corMethod = "spearman", ...){
   res <- seedUsed <- NA
   
   if (ncol(mtx) > nmaxSamples){ # random subset of features are selected
-    randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)),  ...)
+    randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)))
     seedUsed <- randomCols$seed
     mtx <- removeEmptyRowsAndColumns(mtx[, randomCols$res], zerosToNA = TRUE)
   } 
@@ -245,8 +246,8 @@ get_CoefPoly2XRowMeansYRowVars <- function(mtx, ...){
   try({rowMean <- get_rowMeans(mtx)})
   
   try({ 
-    if (!(length(rowSd) == 1 & is.na(rowSd)) & 
-        !(length(rowMean) == 1 & is.na(rowMean))) {
+    if (!(length(rowSd) == 1 && is.na(rowSd)) & 
+        !(length(rowMean) == 1 && is.na(rowMean))) {
       df <- data.frame(
         y=rowSd,
         x=rowMean)
@@ -265,12 +266,12 @@ get_coefHclustRows <- function(mtx, naToZero = FALSE, ...) {
   if (naToZero) mtx[is.na(mtx)] <- 0
   mtx.tmp <- mtx[order(rowSums(is.na(mtx))), ]
   # mtx.tmp <- mtx.tmp[1:min(500,dim(mtx)[1]),1:min(500,dim(mtx)[2])] # max. 500 features and samples
-  randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(500, ncol(mtx)), ...)
+  randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(500, ncol(mtx)))
   seed <- randomCols$seed
-  randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(500, nrow(mtx)), seed = seed, ...)
+  randomRows <- applyFunctionWithSeed(sample, x = 1:nrow(mtx), size= min(500, nrow(mtx)), seed = seed)
   mtx.tmp <- mtx.tmp[randomRows$res, randomCols$res] # max. 500 features and samples
   
-  mtx.tmp <- removeEmptyRowsAndColumns(mtx.tmp, zerosToNA = TRUE)
+  mtx.tmp <- removeEmptyRowsAndColumns(mtx.tmp, zerosToNA = FALSE)
   return(list(res = cluster::coef.hclust(amap::hcluster(mtx.tmp)), seed = seed))
 }
 
@@ -278,7 +279,7 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
   
   seedUsed <- NA
   if (ncol(mtx) > nmaxSamples){ # random subset of features are selected
-    randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)),  ...)
+    randomCols <- applyFunctionWithSeed(sample, x = 1:ncol(mtx), size= min(nmaxSamples, ncol(mtx)))
     seedUsed <- randomCols$seed
     mtx <- mtx[, randomCols$res]
     mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
@@ -311,18 +312,18 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
                    type="response"), intensities, c(0.5, 0.9))$y
   })
   
-  # x5090.lst2 <- list()
-  # for (sample in unique(data.long$Sample)){
-  #   x5090 <- NULL
-  #   data.long.Sample <- data.long %>% dplyr::filter(Sample == sample)
-  #   glmModelSample <- speedglm::speedglm(isNA ~ imputed,
-  #                                        family=binomial(link='logit'),
-  #                                        data = data.long.Sample, fitted = TRUE)
-  # 
-  #   intensities <- seq(-20, max(data.long$imputed), length.out=200)
-  #   x5090 <- approx(predict(glmModelSample, newdata=data.frame(imputed=intensities),type="response"),intensities, c(0.5, 0.9))$y
-  #   x5090.lst2 <- append(x5090.lst2, list(x5090))
-  # }
+  x5090.lst2 <- list()
+  for (sample in unique(data.long$Sample)){
+    x5090 <- NULL
+    data.long.Sample <- data.long %>% dplyr::filter(Sample == sample)
+    glmModelSample <- speedglm::speedglm(isNA ~ imputed,
+                                         family=binomial(link='logit'),
+                                         data = data.long.Sample, fitted = TRUE)
+
+    intensities <- seq(-20, max(data.long$imputed), length.out=200)
+    x5090 <- approx(predict(glmModelSample, newdata=data.frame(imputed=intensities),type="response"),intensities, c(0.5, 0.9))$y
+    x5090.lst2 <- append(x5090.lst2, list(x5090))
+  }
   
   x5090.df <- do.call(rbind, x5090.lst)
   colnames(x5090.df) <- c("IntensityNAp50", "IntensityNAp90")
@@ -725,16 +726,6 @@ readInAllMetabolightsFiles <- function(dataTypePath, lst = list(), zerosToNA = F
     }
   }
   lst
-}
-
-removeEmptyRowsAndColumns <- function(mtx, zerosToNA = FALSE){
-  if (zerosToNA) mtx[mtx == 0] <- NA
-  mtx[mtx == "NaN"] <- NA
-  # remove rows with only NAs
-  # mtx <- mtx[rowSums(is.na(mtx) | mtx == 0) != ncol(mtx), ]
-  mtx <- subset(mtx, rowSums(is.na(mtx) | mtx == 0) != ncol(mtx))
-  if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
-  mtx
 }
 
 readInFile <- function(filePath, rowLabelCol, colsToRemove = c(), zerosToNA = FALSE, alternativeRowLabelCol = "") {
