@@ -301,27 +301,36 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
   
   x5090.lst <- lapply(unique(data.long$Sample), function(sample){
     data.long.Sample <- data.long %>% dplyr::filter(Sample == sample)
-    glmModelSample <- speedglm::speedglm(isNA ~ imputed, 
-                                         family=binomial(link='logit'), 
-                                         data = data.long.Sample, fitted = TRUE)
-    
-    intensities <- seq(-20, max(data.long$imputed), length.out=200)
-    approx(predict(glmModelSample, 
-                   newdata=data.frame(imputed=intensities),
-                   type="response"), intensities, c(0.5, 0.9))$y
+    x5090 <- NA
+    if (any(data.long.Sample$isNA == 1)){
+      glmModelSample <- speedglm::speedglm(isNA ~ imputed, 
+                                           family=binomial(link='logit'), 
+                                           data = data.long.Sample, fitted = TRUE)
+      
+      intensities <- seq(min(data.long$imputed)-20, max(data.long$imputed), 
+                         length.out = 400)
+      x5090 <- approx(predict(glmModelSample, 
+                     newdata=data.frame(imputed=intensities),
+                     type="response"), intensities, c(0.5, 0.9))$y
+    }
+    x5090
   })
   
   # x5090.lst2 <- list()
   # for (sample in unique(data.long$Sample)){
-  #   x5090 <- NULL
+  #   print(sample)
+  #   x5090 <- NA
   #   data.long.Sample <- data.long %>% dplyr::filter(Sample == sample)
-  #   glmModelSample <- speedglm::speedglm(isNA ~ imputed,
-  #                                        family=binomial(link='logit'),
-  #                                        data = data.long.Sample, fitted = TRUE)
+  #   if (any(data.long.Sample$isNA == 1)){
+  #     glmModelSample <- speedglm::speedglm(isNA ~ imputed,
+  #                                          family=binomial(link='logit'),
+  #                                          data = data.long.Sample, fitted = TRUE)
   # 
-  #   intensities <- seq(-20, max(data.long$imputed), length.out=200)
-  #   x5090 <- approx(predict(glmModelSample, newdata=data.frame(imputed=intensities),type="response"),intensities, c(0.5, 0.9))$y
-  #   x5090.lst2 <- append(x5090.lst2, list(x5090))
+  #     intensities <- seq(min(data.long$imputed)-20, max(data.long$imputed), 
+  #                        length.out = 400)
+  #     x5090 <- approx(predict(glmModelSample, newdata=data.frame(imputed=intensities),type="response"),intensities, c(0.5, 0.9))$y
+  #     x5090.lst2 <- append(x5090.lst2, list(x5090))
+  #   }
   # }
   
   x5090.df <- do.call(rbind, x5090.lst)
