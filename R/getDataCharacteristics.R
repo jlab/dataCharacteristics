@@ -302,16 +302,19 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
   x5090.lst <- lapply(unique(data.long$Sample), function(sample){
     data.long.Sample <- data.long %>% dplyr::filter(Sample == sample)
     x5090 <- NA
+    glmModelSample <- NA
     if (any(data.long.Sample$isNA == 1)){
       glmModelSample <- speedglm::speedglm(isNA ~ imputed, 
                                            family=binomial(link='logit'), 
                                            data = data.long.Sample, fitted = TRUE)
       
-      intensities <- seq(min(data.long$imputed)-20, max(data.long$imputed), 
-                         length.out = 400)
-      x5090 <- approx(predict(glmModelSample, 
-                     newdata=data.frame(imputed=intensities),
-                     type="response"), intensities, c(0.5, 0.9))$y
+      if (unname(coefficients(glmModelSample)[2]) < 0){
+        intensities <- seq(min(data.long$imputed)-20, max(data.long$imputed),
+                           length.out = 400)
+        x5090 <- approx(predict(glmModelSample, 
+                                newdata=data.frame(imputed=intensities),
+                                type="response"), intensities, c(0.5, 0.9))$y
+      }
     }
     x5090
   })
@@ -320,25 +323,34 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
   # for (sample in unique(data.long$Sample)){
   #   print(sample)
   #   x5090 <- NA
+  #   glmModelSample <- NA
   #   data.long.Sample <- data.long %>% dplyr::filter(Sample == sample)
   #   if (any(data.long.Sample$isNA == 1)){
   #     glmModelSample <- speedglm::speedglm(isNA ~ imputed,
   #                                          family=binomial(link='logit'),
   #                                          data = data.long.Sample, fitted = TRUE)
+  #     if (unname(coefficients(glmModelSample)[2]) < 0){
+  #       intensities <- seq(min(data.long$imputed)-20, max(data.long$imputed),
+  #                          length.out = 400)
+  #       x5090 <- approx(predict(glmModelSample, newdata=data.frame(imputed=intensities),
+  #                               type="response"), intensities, c(0.5, 0.9))$y
+  #       
+  #       x5090.lst2 <- append(x5090.lst2, list(x5090))
+  #     }
   # 
-  #     intensities <- seq(min(data.long$imputed)-20, max(data.long$imputed), 
-  #                        length.out = 400)
-  #     x5090 <- approx(predict(glmModelSample, newdata=data.frame(imputed=intensities),type="response"),intensities, c(0.5, 0.9))$y
-  #     x5090.lst2 <- append(x5090.lst2, list(x5090))
   #   }
   # }
   
-  x5090.df <- do.call(rbind, x5090.lst)
+  x5090.df <- data.frame(do.call(rbind, x5090.lst))
   colnames(x5090.df) <- c("IntensityNAp50", "IntensityNAp90")
   x5090.sds <- apply(x5090.df, 2, calc_sd)
   
+  nSamplesWithProbValue <- max(c(sum(!is.na(x5090.df$IntensityNAp50)), 
+                                   sum(!is.na(x5090.df$IntensityNAp90))))
+  
   list(IntensityNAp50 = x5090.sds[["IntensityNAp50"]], 
        IntensityNAp90 = x5090.sds[["IntensityNAp90"]],
+       nSamplesWithProbValue = nSamplesWithProbValue,
        seed = seedUsed
   )
 }
@@ -362,7 +374,7 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     prctPC1 <- prctPC2 <- bimodalityRowCorr <- bimodalityRowCorrSeed <- bimodalityColCorr <- bimodalityColCorrSeed <- 
     linearCoefPoly2Row <- quadraticCoefPoly2Row <- 
     coefHclustRows <- coefHclustRowsSeed <- 
-    intensityNAProbability50.sd <- intensityNAProbability90.sd <- intensityNAProbabilitySeed <- NA
+    intensityNAProb50.sd <- intensityNAProb90.sd <- intensityNAProbSeed <- intensityNAProbnSamplesWithProbValue <- NA
   
   try({medianSampleVariance <- median(apply(mtx, 2, calc_variance), na.rm = TRUE)})
   try({medianAnalyteVariance <- median(unname(apply(mtx, 1, calc_variance)), na.rm = TRUE)})
@@ -423,9 +435,10 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
   
   try({
     x5090.sds <- calculateIntensityNAProbability5090(mtx)
-    intensityNAProbability50.sd <- x5090.sds[["IntensityNAp50"]]
-    intensityNAProbability90.sd <- x5090.sds[["IntensityNAp90"]]
-    intensityNAProbabilitySeed <- x5090.sds[["seed"]]
+    intensityNAProb50.sd <- x5090.sds[["IntensityNAp50"]]
+    intensityNAProb90.sd <- x5090.sds[["IntensityNAp90"]]
+    intensityNAProbSeed <- x5090.sds[["seed"]]
+    intensityNAProbnSamplesWithProbValue <- x5090.sds[["nSamplesWithProbValue"]]
   })
   
   gc()
@@ -464,9 +477,10 @@ getCharacteristicsHelper <- function(mtx, fast = TRUE){
     quadraticCoefPoly2Row = quadraticCoefPoly2Row,
     coefHclustRows = coefHclustRows,
     coefHclustRowsSeed = coefHclustRowsSeed,
-    intensityNAProbability50.sd = intensityNAProbability50.sd,
-    intensityNAProbability90.sd = intensityNAProbability90.sd,
-    intensityNAProbabilitySeed = intensityNAProbabilitySeed
+    intensityNAProb50.sd = intensityNAProb50.sd,
+    intensityNAProb90.sd = intensityNAProb90.sd,
+    intensityNAProbSeed = intensityNAProbSeed,
+    intensityNAProbnSamplesWithProbValue = intensityNAProbnSamplesWithProbValue
   )
   
   if (!fast){
@@ -594,7 +608,7 @@ getDataCharacteristics <- function(mtx, datasetID="test", dataType="test", ignor
   
     
   ## Calculate and save if already calcuated:
-  }else{
+  } else {
     mtx[mtx == 0] <- NA
     mtx[mtx == Inf] <- NA
     mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
