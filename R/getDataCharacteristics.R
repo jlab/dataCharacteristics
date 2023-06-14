@@ -334,7 +334,7 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
   #                          length.out = 400)
   #       x5090 <- approx(predict(glmModelSample, newdata=data.frame(imputed=intensities),
   #                               type="response"), intensities, c(0.5, 0.9))$y
-  #       
+  # 
   #       x5090.lst2 <- append(x5090.lst2, list(x5090))
   #     }
   # 
@@ -526,6 +526,7 @@ getNaFeatures <- function(mtx) {
     maxColNaPercentage = max(colNaPercentage),
     percNATotal = mean(is.na(mtx)) * 100,
     percOfRowsWithNAs = sum(apply(mtx, 1, anyNA))/nrow(mtx) * 100,
+    percOfColsWithNAs = sum(apply(mtx, 2, anyNA))/ncol(mtx) * 100,
     corSampleMeanNA = corSampleMeanNA,
     corSampleMeanNAPval = corSampleMeanNAPval,
     corAnalyteMeanNA = corAnalyteMeanNA,
