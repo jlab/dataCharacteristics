@@ -967,18 +967,26 @@ getDataCharacteristicsForDataType <- function(dataType) {
       ## Load if already calcuated  
       if(!file.exists(rdsName)){
         print(dataTypeFilePath)
-        ## Open MatrixMarket file
-        # library(Matrix)
-        mtx <- Matrix::readMM(dataTypeFilePath)
-        mtx <- as.matrix(mtx)
-        mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
-        # Skip datasets if they contain more than 1% negative numbers
-        if (!is.vector(mtx)) {
-          if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=datasetID, dataType=dataTypePath))
+        # Because script always got killed for "./sc_normalized/E-HCAD-4.aggregated_filtered_normalised_counts.mtx"
+        if (!(dataTypeFilePath %in% c("./sc_normalized/E-HCAD-4.aggregated_filtered_normalised_counts.mtx", 
+                                  "./sc_normalized/E-MTAB-8142.aggregated_filtered_normalised_counts.mtx",
+                                  "./sc_unnormalized/E-HCAD-4.aggregated_filtered_counts.mtx",
+                                  "./sc_unnormalized/E-MTAB-8142.aggregated_filtered_counts.mtx"))) {
+          ## Open MatrixMarket file
+          # library(Matrix)
+          mtx <- Matrix::readMM(dataTypeFilePath)
+          mtx <- as.matrix(mtx)
+          mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
+          # Skip datasets if they contain more than 1% negative numbers
+          if (!is.vector(mtx)) {
+            if (nrow(mtx) > 9 & ncol(mtx) > 4) lst <- append(lst, getDataCharacteristics(mtx=mtx, datasetID=datasetID, dataType=dataTypePath))
+          }
+          mtx <- NULL
+          
+          gc()
         }
-        mtx <- NULL
-        
-        gc()
+      } else {
+        lst <- append(lst, readRDS(file=rdsName))
       }
     }
   } else if (dataType == "scProteomics"){
@@ -1010,8 +1018,8 @@ dataTypes <- c(
   "microbiome",
   "RNAseq_fpkms_median", "RNAseq_tpms_median",
   "RNAseq_raw", "RNAseq_raw_undecorated", 
-  # "RNAseq_transcripts_tpms",
-  # "RNAseq_transcripts_raw_undecorated",
+  # # "RNAseq_transcripts_tpms",
+  # # "RNAseq_transcripts_raw_undecorated",
   "microarray",
   "sc_normalized",
   "sc_unnormalized"
