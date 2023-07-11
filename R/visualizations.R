@@ -7,7 +7,7 @@ library(GGally)
 library(ggforce)
 theme_set(theme_bw())
 
-dataset <- ldply(list.files("results", pattern = ".csv", full.names = TRUE), read.csv, header=TRUE)
+dataset <- ldply(list.files("20230614_results", pattern = ".csv", full.names = TRUE), read.csv, header=TRUE)
 #dataset <- plyr::ldply(list.files(pattern = ".csv", full.names = TRUE), read.csv, header=TRUE)
 dataset <- dataset[dataset$nSamples>0,]
 dataset <- dataset[dataset$variance>0,]
@@ -16,12 +16,13 @@ names(dataset) <- gsub(x = names(dataset), pattern = "\\.log2|\\.wNAs", replacem
 #names(dataset)[names(dataset) == 'corRowR'] <- 'corAnalyteMeanNA'
 
 dataset <- dataset %>% 
-  mutate(dataType2 = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
-                               grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
-                               grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
-                               grepl("LC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_LC"),
-                               grepl("GC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_GC"),
-                               TRUE ~ dataType),
+  mutate(
+    # dataType2 = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
+    #                            grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
+    #                            grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
+    #                            grepl("LC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_LC"),
+    #                            grepl("GC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_GC"),
+    #                            TRUE ~ dataType),
          # dataType3 = case_when(grepl("LC", datasetID, ignore.case = TRUE) & 
          #                         grepl("pos", datasetID, ignore.case = TRUE) & 
          #                         dataType == "metabolomics_MS" ~ paste0(dataType, "_LC_pos"),
@@ -35,11 +36,11 @@ dataset <- dataset %>%
          #                         grepl("neg", datasetID, ignore.case = TRUE) & 
          #                         dataType == "metabolomics_MS" ~ paste0(dataType, "_GC_neg"),
          #                       TRUE ~ dataType4),
-         dataType4 = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
-                               grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
-                               grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
-                               TRUE ~ dataType),
-         dataType5 = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
+         # dataType4 = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
+         #                       grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
+         #                       grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
+         #                       TRUE ~ dataType),
+         dataType = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
                                grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
                                grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
                                dataType == "RNAseq_raw_undecorated" ~ "RNAseq_raw",
@@ -51,16 +52,74 @@ dataset <- dataset %>%
          #                                          TRUE ~ dataType)
          )
 
-selectedDataTypeCol <- "dataType5"
-data <- dataset %>% dplyr::group_by(!!sym(selectedDataTypeCol)) %>% filter(n() > 5) %>% ungroup
+# selectedDataTypeCol <- "dataType"
+# data <- dataset %>% dplyr::group_by(!!sym(selectedDataTypeCol)) %>% filter(n() > 5) %>% ungroup
+data <- dataset %>% dplyr::group_by(dataType) %>% filter(n() > 5) %>% ungroup
+
 
 write.csv(data, "datasets_results.csv", row.names = FALSE)
-write.csv(data.frame(table(data[, selectedDataTypeCol])), "numberOfDatasets.csv", row.names = FALSE)
+write.csv(data.frame(table(data[, "dataType"])), "numberOfDatasets.csv", row.names = FALSE)
+
+
+
+
+# data <- dataset %>% dplyr::select(-nNegativeNumbers)
+# Get %NA per column grouped by data type
+naPrctPerCol <- data %>%
+  dplyr::group_by(dataType) %>%
+  summarise_all(~sum(is.na(.))/n()*100)
+
+# Remove "bimodalityRowCorr" because of too many NAs
+# data <- dataset %>% dplyr::select(-c(nNegativeNumbers, bimodalityRowCorr, bimodalityColCorr))
+
+data <- data %>%
+  mutate_if(is.integer, as.numeric) %>% 
+  mutate("prctnDistinctValues" = nDistinctValues/((nSamples * nAnalytes) * ((100 - percNATotal)/100)) * 100 ) %>%
+  select(-c(nDistinctValues, nNegativeNumbers, bimodalityRowCorr, bimodalityColCorr))
+
+
+
+seedCols <- c("bimodalityRowCorrSeed", "bimodalityColCorrSeed", 
+                                                          "coefHclustRowsSeed", "intensityNAProbSeed"#,
+                                                          #"minRowNaPercentage", "maxRowNaPercentage", 
+                                                          #"minColNaPercentage", "maxColNaPercentage", 
+                                                          #"percOfRowsWithNAs", "percOfColsWithNAs"
+)
+
+data <- data[,!(colnames(data) %in% seedCols)]
+
+# data <- data %>%
+#   mutate_if(is.integer, as.numeric) %>% 
+#   mutate("prctminRowNonNaNumber" = (nSamples - minRowNonNaNumber)/nSamples * 100 ) %>%
+#   mutate("prctmaxRowNonNaNumber" = (nSamples - maxRowNonNaNumber)/nSamples * 100 ) 
+# # prctminRowNonNaNumber is the same as maxRowNaPercentage, prctmaxRowNonNaNumber is the same as minRowNaPercentage
+
+
+
+naRelatedCols <- c("corSampleMeanNA", "corSampleMeanNAPval", "corAnalyteMeanNA", 
+                   "corAnalyteMeanNAPval", 
+                   "intensityNAProb50.sd", 
+                   "intensityNAProb90.sd",
+                   "intensityNAProbnSamplesWithProbValue",
+                   "minRowNonNaNumber", "maxRowNonNaNumber")
+
+data.complete <- data[,!(colnames(data) %in% naRelatedCols)]
+
+data.complete <- data.complete[complete.cases(data.complete), ]
+
+
+
 #############################################
 
-plotNipalsBiplot <- function(df, groups= c(), alpha = 0.5) {
+plotNipalsBiplot <- function(df, groups= c(), alpha = 0.5, 
+                             pcaMethod = "nipals",
+                             coordRatio = 0.5, 
+                             facetZoom = TRUE, 
+                             xlimLower = NA, xlimUpper = NA,
+                             ylimLower = NA, ylimUpper = NA,
+                             PCchoices = 1:2) {
   # See https://stackoverflow.com/a/49788251
-  #   # install_github("vqv/ggbiplot")
+  #   # devtools::install_github("vqv/ggbiplot")
 
   library(ggbiplot)
   
@@ -72,7 +131,7 @@ plotNipalsBiplot <- function(df, groups= c(), alpha = 0.5) {
   # "vector" (vector normalisation b=b/|b|), 
   # "pareto" (sqrt UV) or "none" 
   # to indicate which scaling should be used to scale the matrix with aa variables and b samples. 
-  pca.obj2 <- pcaMethods::pca(df, method="nipals", nPcs=4, center=TRUE
+  pca.obj2 <- pcaMethods::pca(df, method=pcaMethod, nPcs=4, center=TRUE
                               , scale = "uv"
   )
   
@@ -83,6 +142,7 @@ plotNipalsBiplot <- function(df, groups= c(), alpha = 0.5) {
   pca.obj$scale<-pca.obj2@scale
   
   P2 <- ggbiplot::ggbiplot(pca.obj,
+                           choices = PCchoices,
                            obs.scale = 1, 
                            var.scale=1,
                            ellipse=T,
@@ -92,14 +152,23 @@ plotNipalsBiplot <- function(df, groups= c(), alpha = 0.5) {
                            groups=groups, 
                            alpha=0)  +
     scale_color_discrete(name = '') +  
-    coord_fixed(ratio = 0.4) +
-    #theme_bw() +
-    ggforce::facet_zoom(xlim = c(-3, 4), ylim = c(-2.5, 6))
-
-    P2 <- P2 + theme(legend.direction ='horizontal', 
-                     legend.position = 'bottom')
+    coord_fixed(ratio = coordRatio)
+  
+  if (facetZoom) {
+    P2 <- P2 + ggforce::facet_zoom(xlim = c(xlimLower, xlimUpper), ylim = c(ylimLower, ylimUpper))
+  } else {
+    if (!all(is.na(c(xlimLower, xlimUpper))))
+      P2 <- P2 + xlim(c(xlimLower, xlimUpper))
     
-    P2$layers <- c(geom_point(aes(colour=groups), cex=1, alpha = alpha), P2$layers)
+    if (!all(is.na(c(ylimLower, ylimUpper))))
+      P2 <- P2 + ylim(c(ylimLower, ylimUpper))
+  }
+  
+
+  P2 <- P2 + theme(legend.direction ='horizontal', 
+                   legend.position = 'bottom')
+  
+  P2$layers <- c(geom_point(aes(colour=groups), cex=1, alpha = alpha), P2$layers)
   
   P2
 }
@@ -127,48 +196,87 @@ colorForCorValues <- function(data, mapping, method="spearman", use="pairwise", 
     theme(panel.background = element_rect(fill=fill))
 }
 
-plotData <- function(df, groupColName = "", addStr = "") {
-
-  for (group in unlist(unique(df[, groupColName]))){
-    print(group)
-    df.group <- df[df[, groupColName] == group,]
-    pdf(paste0("ggpairs_", group, addStr, ".pdf"), width = 12, height = 12)
-    print(ggpairs(df.group, columns = 2:ncol(df.group),
-                  lower = list(continuous = wrap("smooth", alpha = 0.3, size = 0.2)),
-                  upper = list(continuous = wrap(colorForCorValues, method = "spearman"),
-                               continuous = "smooth") #,
-                  # mapping=aes(# color = get(groupColName),
-                  #   # fill= get(groupColName),
-                  #   alpha=0.3)
-    ) + 
-      theme(axis.text.x = element_text(angle = 90, hjust = 1, size=8)) +
-      ggtitle(group) +
-      # theme_bw() +
-      theme(strip.placement = "outside", text = element_text(size = 7))
-    )
-    
-    # print(GGally::ggpairs(df.group, columns = 2:ncol(df.group), # ggplot2::aes(colour=get(groupColName)),
-    #               lower = list(continuous = wrap("points", alpha = 0.3, size = 0.2),
-    #                            continuous = "smooth",
-    #                            combo = wrap("dot_no_facet", alpha = 0.4)),
-    #               upper = list(continuous = wrap("cor", method = "spearman")),
-    #               mapping=aes(# color = get(groupColName),
-    #                           # fill= get(groupColName),
-    #                           alpha=0.3)) +
-    #         ggtitle(group) +
-    #         theme_bw() +
-    #         theme(strip.placement = "outside", text = element_text(size = 7))
-    #       )
-    dev.off()
+plotData <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals", do.ggpairs = FALSE) {
+  if (do.ggpairs) {
+    for (group in unlist(unique(df[, groupColName]))){
+      print(group)
+      df.group <- df[df[, groupColName] == group,]
+      pdf(paste0("ggpairs_", group, addStr, ".pdf"), width = 12, height = 12)
+      print(ggpairs(df.group, columns = 2:ncol(df.group),
+                    lower = list(continuous = wrap("smooth", alpha = 0.3, size = 0.2)),
+                    upper = list(continuous = wrap(colorForCorValues, method = "spearman"),
+                                 continuous = "smooth") #,
+                    # mapping=aes(# color = get(groupColName),
+                    #   # fill= get(groupColName),
+                    #   alpha=0.3)
+      ) + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1, size=8)) +
+        ggtitle(group) +
+        # theme_bw() +
+        theme(strip.placement = "outside", text = element_text(size = 7))
+      )
+      
+      # print(GGally::ggpairs(df.group, columns = 2:ncol(df.group), # ggplot2::aes(colour=get(groupColName)),
+      #               lower = list(continuous = wrap("points", alpha = 0.3, size = 0.2),
+      #                            continuous = "smooth",
+      #                            combo = wrap("dot_no_facet", alpha = 0.4)),
+      #               upper = list(continuous = wrap("cor", method = "spearman")),
+      #               mapping=aes(# color = get(groupColName),
+      #                           # fill= get(groupColName),
+      #                           alpha=0.3)) +
+      #         ggtitle(group) +
+      #         theme_bw() +
+      #         theme(strip.placement = "outside", text = element_text(size = 7))
+      #       )
+      dev.off()
+    }
   }
-  
-  pdf(file = paste0("biplotNipals", addStr, ".pdf"), width = 12, height = 10)
+    
+  pdf(file = paste0("biplotNipals_facetZoom_PC1vs2", addStr, ".pdf"), width = 12, height = 10)
   print(plotNipalsBiplot(df = df %>% dplyr::select(-!!groupColName), 
                          groups= df[[groupColName]],
-                         alpha = 0.3))
+                         alpha = 0.3,
+                         pcaMethod = pcaMethod,
+                         facetZoom = TRUE,
+                         PCchoices = 1:2,
+                         xlimLower = -4, xlimUpper = 5,
+                         ylimLower = -5, ylimUpper = 8))
   dev.off()
   
-  pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method="nipals", nPcs=4, center=TRUE
+  pdf(file = paste0("biplotNipals_facetZoom_PC1vs3", addStr, ".pdf"), width = 12, height = 10)
+  print(plotNipalsBiplot(df = df %>% dplyr::select(-!!groupColName), 
+                         groups= df[[groupColName]],
+                         alpha = 0.3,
+                         pcaMethod = pcaMethod,
+                         facetZoom = TRUE,
+                         PCchoices = c(1, 3),
+                         xlimLower = -5, xlimUpper = 5,
+                         ylimLower = -7, ylimUpper = 4))
+  dev.off()
+  
+  pdf(file = paste0("biplotNipals_facetZoom_PC2vs3", addStr, ".pdf"), width = 12, height = 10)
+  print(plotNipalsBiplot(df = df %>% dplyr::select(-!!groupColName), 
+                         groups= df[[groupColName]],
+                         alpha = 0.3,
+                         pcaMethod = pcaMethod,
+                         facetZoom = TRUE,
+                         PCchoices = c(2, 3),
+                         xlimLower = -5, xlimUpper = 7,
+                         ylimLower = -10, ylimUpper = 5
+                         ))
+  dev.off()
+  
+  ## Remove outlier "E-GEOD-152766.aggregated_filtered_counts.mtx"
+  # df <- df[row.names(df) != "E-GEOD-152766.aggregated_filtered_counts.mtx", ]
+  pdf(file = paste0("biplotNipals_", addStr, ".pdf"), width = 12, height = 10)
+  print(plotNipalsBiplot(df = df %>% dplyr::select(-!!groupColName), 
+                         groups= df[[groupColName]],
+                         alpha = 0.3,
+                         pcaMethod = pcaMethod,
+                         facetZoom = FALSE))
+  dev.off()
+  
+  pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method=pcaMethod, nPcs=4, center=TRUE
                          , scale = "uv")
   write.csv(pca@loadings, paste0("loadings", addStr,".csv"))
   dat <- merge(pcaMethods::scores(pca), df, by=0)
@@ -206,9 +314,13 @@ plotData <- function(df, groupColName = "", addStr = "") {
   htmlwidgets::saveWidget(fig, paste0("plotly", addStr,".html"), selfcontained = F, libdir = "lib")
 }
 
+# margPlot <- ggplot(data, aes(x = corSampleMeanNA, y = corAnalyteMeanNA, colour = get(selectedDataTypeCol))) +
+# geom_point(aes(fill = get(selectedDataTypeCol)),  size = 0.8, alpha = 0.5) +
+#   theme_minimal() +
+#   theme(legend.title=element_blank())
 
-margPlot <- ggplot(data, aes(x = corSampleMeanNA, y = corAnalyteMeanNA, colour = get(selectedDataTypeCol))) +
-  geom_point(aes(fill = get(selectedDataTypeCol)),  size = 0.8, alpha = 0.5) +
+margPlot <- ggplot(data, aes(x = corSampleMeanNA, y = corAnalyteMeanNA, colour = dataType)) +
+  geom_point(aes(fill = dataType),  size = 0.8, alpha = 0.5) +
   theme_minimal() +
   theme(legend.title=element_blank())
 
@@ -224,14 +336,27 @@ dev.off()
 #                    "medianSampleVariance.wNAs.log2", "medianAnalyteVariance.wNAs.log2", "skewness.wNAs.log2", "prctPC1.wNAs.log2", "prctPC2.wNAs.log2")]
 # data2.woMet <- data2[!grepl("metabolomics", data2$dataType4), ]
 
-data2 <- data[, c(selectedDataTypeCol, 
-                  "nSamples", 
-                  "nAnalytes", 
-                  "percNATotal", "corSampleMeanNA", "corAnalyteMeanNA",  "median", 
-                  "medianSampleVariance", "medianAnalyteVariance", "skewness", "prctPC1", "prctPC2")]
+# data2 <- data[, c(selectedDataTypeCol, 
+#                   "nSamples", 
+#                   "nAnalytes", 
+#                   "percNATotal", "corSampleMeanNA", "corAnalyteMeanNA",  "median", 
+#                   "medianSampleVariance", "medianAnalyteVariance", "skewness", "prctPC1", "prctPC2")]
 
-plotData(df = data2, groupColName = selectedDataTypeCol, addStr = "")
 
+data1 <- data[, c("dataType", 
+                  selectedCols)]
+
+plotData(df = data1, groupColName = "dataType", addStr = "", pcaMethod = "svd") # nipals
+
+boxplotCols <- setdiff(unique(c(colnames(data1), "corSampleMeanNA", "corAnalyteMeanNA")), "dataType")
+
+# boxplotCols <-  c("nSamples", "nAnalytes", 
+#                    "medianSampleVariance", "medianAnalyteVariance",
+#                    "median", "skewness", "prctPC1", "prctPC2",
+#                    "corSampleMeanNA", "corAnalyteMeanNA", "percNATotal")
+
+data2 <- data[, c("dataType", 
+                  boxplotCols)]
 data2$`log2(nSamples)` <- log2(data2$nSamples)
 data2$`log2(nAnalytes)` <- log2(data2$nAnalytes)
 data2$`log2(medianSampleVariance)` <- log2(data2$medianSampleVariance)
@@ -247,7 +372,8 @@ data2 <- data2[ , !names(data2) %in%
 # dput(names(data2))
 
 data2.long <- reshape2::melt(data2)
-neworder <- c("dataType5", 
+
+neworder <- c("dataType", 
               "log2(nSamples)", "log2(nAnalytes)", 
               "log2(medianSampleVariance)", "log2(medianAnalyteVariance)",
               "median", "skewness", "prctPC1", "prctPC2",
@@ -258,21 +384,21 @@ data2.long <- dplyr::arrange(dplyr::mutate(data2.long,
 
 numberOfDatasetsIncluded <- data2.long %>% 
   na.omit() %>%
-  group_by(get(selectedDataTypeCol), variable) %>%  tally() %>%
+  group_by(dataType, variable) %>%  tally() %>%
   ungroup()
-colnames(numberOfDatasetsIncluded) <- c(selectedDataTypeCol, "variable", "count")
+colnames(numberOfDatasetsIncluded) <- c("dataType", "variable", "count")
 write.csv(numberOfDatasetsIncluded, "numberOfDatasetsIncluded.csv", row.names = FALSE)
 
 # For each data characteristic: Median of the median of each data type
 medianValues <- data2.long %>%
-  group_by(get(selectedDataTypeCol), variable) %>%  
+  group_by(dataType, variable) %>%  
   summarise(medianValue = median(value, na.rm=T)) %>%
   group_by(variable) %>%  
   summarise(medianValue = median(medianValue, na.rm=T))
 write.csv(medianValues, "medianValues.csv", row.names = FALSE)
 
-ggplot.charact <- ggplot(data2.long, aes(forcats::fct_rev(get(selectedDataTypeCol)), value)) +
-  geom_boxplot(aes(fill=get(selectedDataTypeCol)), alpha=0.5, outlier.size=0.5) +
+ggplot.charact <- ggplot(data2.long, aes(forcats::fct_rev(dataType), value)) +
+  geom_boxplot(aes(fill = dataType), alpha=0.5, outlier.size=0.5) +
   coord_flip() +
   xlab("") +
   ylab("") +
