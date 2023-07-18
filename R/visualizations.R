@@ -52,9 +52,21 @@ dataset <- dataset %>%
          #                                          TRUE ~ dataType)
          )
 
+
+# Remove outliers: 
+# E-GEOD-152766.aggregated_filtered_counts.mtx, (also E-GEOD-152766.aggregated_filtered_normalised_counts.mtx to make
+# numbers of normalized and unnormalized sc datasets even.)
+# MTBLS407_m_MTBLS407_21022_metabolite_profiling_mass_spectrometry_v2_maf.tsv,
+# MTBLS407_m_MTBLS407_21548_metabolite_profiling_mass_spectrometry_v2_maf.tsv
+data <- dataset %>% dplyr::filter(!(datasetID %in% c("E-GEOD-152766.aggregated_filtered_counts.mtx", 
+                                                     "E-GEOD-152766.aggregated_filtered_normalised_counts.mtx",
+                                                   "MTBLS407_m_MTBLS407_21022_metabolite_profiling_mass_spectrometry_v2_maf.tsv",
+                                                   "MTBLS407_m_MTBLS407_21548_metabolite_profiling_mass_spectrometry_v2_maf.tsv")))
+
+
 # selectedDataTypeCol <- "dataType"
 # data <- dataset %>% dplyr::group_by(!!sym(selectedDataTypeCol)) %>% filter(n() > 5) %>% ungroup
-data <- dataset %>% dplyr::group_by(dataType) %>% filter(n() > 5) %>% ungroup
+data <- data %>% dplyr::group_by(dataType) %>% filter(n() > 5) %>% ungroup
 
 
 write.csv(data, "datasets_results.csv", row.names = FALSE)
@@ -71,11 +83,12 @@ naPrctPerCol <- data %>%
 
 # Remove "bimodalityRowCorr" because of too many NAs
 # data <- dataset %>% dplyr::select(-c(nNegativeNumbers, bimodalityRowCorr, bimodalityColCorr))
+data$bimodalityRowCorr <- NULL
 
 data <- data %>%
   mutate_if(is.integer, as.numeric) %>% 
   mutate("prctnDistinctValues" = nDistinctValues/((nSamples * nAnalytes) * ((100 - percNATotal)/100)) * 100 ) %>%
-  select(-c(nDistinctValues, nNegativeNumbers, bimodalityRowCorr, bimodalityColCorr))
+  dplyr::select(-c(nDistinctValues, nNegativeNumbers))
 
 
 
@@ -93,25 +106,59 @@ data <- data[,!(colnames(data) %in% seedCols)]
 #   mutate("prctminRowNonNaNumber" = (nSamples - minRowNonNaNumber)/nSamples * 100 ) %>%
 #   mutate("prctmaxRowNonNaNumber" = (nSamples - maxRowNonNaNumber)/nSamples * 100 ) 
 # # prctminRowNonNaNumber is the same as maxRowNaPercentage, prctmaxRowNonNaNumber is the same as minRowNaPercentage
+data <- data[,!(colnames(data) %in% c("minRowNonNaNumber", "maxRowNonNaNumber"))] 
 
 
+#############################################
+# Rename
 
-naRelatedCols <- c("corSampleMeanNA", "corSampleMeanNAPval", "corAnalyteMeanNA", 
-                   "corAnalyteMeanNAPval", 
-                   "intensityNAProb50.sd", 
-                   "intensityNAProb90.sd",
-                   "intensityNAProbnSamplesWithProbValue",
-                   "minRowNonNaNumber", "maxRowNonNaNumber")
+Oldnames <- c("datasetID", "dataType", "nSamples", "nAnalytes", "minRowNaPercentage", 
+              "maxRowNaPercentage", "minColNaPercentage", "maxColNaPercentage", 
+              "percNATotal", "percOfRowsWithNAs", "percOfColsWithNAs", "corSampleMeanNA", 
+              "corSampleMeanNAPval", "corAnalyteMeanNA", "corAnalyteMeanNAPval", 
+              "mean", "median", "min", "max", "medianSampleVariance", "medianAnalyteVariance", 
+              "variance", "kurtosis", "skewness", "prctPC1", "prctPC2", "bimodalityColCorr", 
+              "linearCoefPoly2Row", "quadraticCoefPoly2Row", "coefHclustRows", 
+              "intensityNAProb50.sd", "intensityNAProb90.sd", "intensityNAProbnSamplesWithProbValue", 
+              "prctnDistinctValues")
+
+Newnames <- c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
+              "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
+              "% NA", "% Analytes with NAs", "% Samples with NAs", 
+              "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Samples) (p-Value)", 
+              "Corr(Mean vs. % NA) (Analytes)", "Corr(Mean vs. % NA) (Analytes) (p-Value)", 
+              "Mean", "Median", "Min", "Max", "median(Variance of samples)", "median(Variance of analytes)", 
+              "Variance", "Kurtosis", "Skewness", "% Var. explained by PC1", "% Var. explained by PC2", 
+              "Bimodality of sample correlations", 
+              "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+              "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", 
+              "Agglom. coef. hierarch. analyte clustering", 
+              "sd(Intensity w/ prob(NA) = 50% for sample)", "sd(Intensity w/ prob(NA) = 90% for sample)", 
+              "# Samples w/ intensityNAProb50.sd or intensityNAProb90.sd", 
+              "% Dinstinct values")
+
+renameTable <- data.frame(Oldnames = Oldnames,
+                          Newnames = Newnames)
+
+data <- data %>% dplyr::rename_with(~ Newnames[which(Oldnames == .x)], .cols = Oldnames)
+
+naRelatedCols <- c("Corr(Mean vs. % NA) (Samples)", 
+                   "Corr(Mean vs. % NA) (Samples) (p-Value)", 
+                   "Corr(Mean vs. % NA) (Analytes)", 
+                   "Corr(Mean vs. % NA) (Analytes) (p-Value)", 
+                   "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                   "sd(Intensity w/ prob(NA) = 90% for sample)",
+                   "# Samples w/ intensityNAProb50.sd or intensityNAProb90.sd",
+                   "Bimodality of sample correlations"
+                   )
 
 data.complete <- data[,!(colnames(data) %in% naRelatedCols)]
 
 data.complete <- data.complete[complete.cases(data.complete), ]
 
-
-
 #############################################
 
-plotNipalsBiplot <- function(df, groups= c(), alpha = 0.5, 
+plotPCABiplot <- function(df, groups= c(), alpha = 0.5, 
                              pcaMethod = "nipals",
                              coordRatio = 0.5, 
                              facetZoom = TRUE, 
@@ -232,8 +279,8 @@ plotData <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals", d
     }
   }
     
-  pdf(file = paste0("biplotNipals_facetZoom_PC1vs2", addStr, ".pdf"), width = 12, height = 10)
-  print(plotNipalsBiplot(df = df %>% dplyr::select(-!!groupColName), 
+  pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs2", addStr, ".pdf"), width = 12, height = 10)
+  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
                          groups= df[[groupColName]],
                          alpha = 0.3,
                          pcaMethod = pcaMethod,
@@ -243,33 +290,33 @@ plotData <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals", d
                          ylimLower = -5, ylimUpper = 8))
   dev.off()
   
-  pdf(file = paste0("biplotNipals_facetZoom_PC1vs3", addStr, ".pdf"), width = 12, height = 10)
-  print(plotNipalsBiplot(df = df %>% dplyr::select(-!!groupColName), 
+  pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs3", addStr, ".pdf"), width = 12, height = 10)
+  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
                          groups= df[[groupColName]],
                          alpha = 0.3,
                          pcaMethod = pcaMethod,
                          facetZoom = TRUE,
                          PCchoices = c(1, 3),
                          xlimLower = -5, xlimUpper = 5,
-                         ylimLower = -7, ylimUpper = 4))
+                         ylimLower = -4, ylimUpper = 8))
   dev.off()
   
-  pdf(file = paste0("biplotNipals_facetZoom_PC2vs3", addStr, ".pdf"), width = 12, height = 10)
-  print(plotNipalsBiplot(df = df %>% dplyr::select(-!!groupColName), 
+  pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC2vs3", addStr, ".pdf"), width = 12, height = 10)
+  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
                          groups= df[[groupColName]],
                          alpha = 0.3,
                          pcaMethod = pcaMethod,
                          facetZoom = TRUE,
                          PCchoices = c(2, 3),
                          xlimLower = -5, xlimUpper = 7,
-                         ylimLower = -10, ylimUpper = 5
+                         ylimLower = -4, ylimUpper = 8
                          ))
   dev.off()
   
   ## Remove outlier "E-GEOD-152766.aggregated_filtered_counts.mtx"
   # df <- df[row.names(df) != "E-GEOD-152766.aggregated_filtered_counts.mtx", ]
-  pdf(file = paste0("biplotNipals_", addStr, ".pdf"), width = 12, height = 10)
-  print(plotNipalsBiplot(df = df %>% dplyr::select(-!!groupColName), 
+  pdf(file = paste0("biplot_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
+  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
                          groups= df[[groupColName]],
                          alpha = 0.3,
                          pcaMethod = pcaMethod,
@@ -282,7 +329,7 @@ plotData <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals", d
   dat <- merge(pcaMethods::scores(pca), df, by=0)
   
   library(GGally)
-  pdf(paste0("ggpairs_Nipals", addStr, ".pdf"), width = 12, height = 10)
+  pdf(paste0("ggpairs_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
   print(GGally::ggpairs(dat, columns = 2:5, ggplot2::aes(colour=get(groupColName)),
                 lower = list(continuous = wrap("smooth", alpha = 0.3, size = 1), 
                              combo = wrap("dot_no_facet", alpha = 0.4)),
@@ -319,8 +366,9 @@ plotData <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals", d
 #   theme_minimal() +
 #   theme(legend.title=element_blank())
 
-margPlot <- ggplot(data, aes(x = corSampleMeanNA, y = corAnalyteMeanNA, colour = dataType)) +
-  geom_point(aes(fill = dataType),  size = 0.8, alpha = 0.5) +
+margPlot <- ggplot(data, aes(x = `Corr(Mean vs. % NA) (Samples)`, 
+                             y = `Corr(Mean vs. % NA) (Analytes)`, colour = `Data type`)) +
+  geom_point(aes(fill = `Data type`),  size = 0.8, alpha = 0.5) +
   theme_minimal() +
   theme(legend.title=element_blank())
 
@@ -328,249 +376,144 @@ pdf("marginPlot.pdf", width = 12, height = 10)
 ggExtra::ggMarginal(margPlot, groupFill = TRUE, groupColour = TRUE)
 dev.off()
 
+plotData(df = data.complete %>% dplyr::select(-`Dataset ID`), groupColName = "Data type", addStr = "", pcaMethod = "svd") # "svd" or "nipals"
 
-# data2 <- data[, c("dataType4", 
-#                   "nSamples", 
-#                   "nAnalytes", 
-#                   "percNATotal.log2", "corColR.log2", "corRowR.log2",  "median.wNAs.log2", 
-#                    "medianSampleVariance.wNAs.log2", "medianAnalyteVariance.wNAs.log2", "skewness.wNAs.log2", "prctPC1.wNAs.log2", "prctPC2.wNAs.log2")]
-# data2.woMet <- data2[!grepl("metabolomics", data2$dataType4), ]
-
-# data2 <- data[, c(selectedDataTypeCol, 
-#                   "nSamples", 
-#                   "nAnalytes", 
-#                   "percNATotal", "corSampleMeanNA", "corAnalyteMeanNA",  "median", 
-#                   "medianSampleVariance", "medianAnalyteVariance", "skewness", "prctPC1", "prctPC2")]
-
-
-data1 <- data[, c("dataType", 
-                  selectedCols)]
-
-plotData(df = data1, groupColName = "dataType", addStr = "", pcaMethod = "svd") # nipals
-
-boxplotCols <- setdiff(unique(c(colnames(data1), "corSampleMeanNA", "corAnalyteMeanNA")), "dataType")
+boxplotCols <- setdiff(unique(c(colnames(data.complete), "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
+                                "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                                "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
 
 # boxplotCols <-  c("nSamples", "nAnalytes", 
 #                    "medianSampleVariance", "medianAnalyteVariance",
 #                    "median", "skewness", "prctPC1", "prctPC2",
 #                    "corSampleMeanNA", "corAnalyteMeanNA", "percNATotal")
 
-data2 <- data[, c("dataType", 
+
+data2 <- data[, c("Data type", 
                   boxplotCols)]
-data2$`log2(nSamples)` <- log2(data2$nSamples)
-data2$`log2(nAnalytes)` <- log2(data2$nAnalytes)
-data2$`log2(medianSampleVariance)` <- log2(data2$medianSampleVariance)
-data2$`log2(medianAnalyteVariance)` <- log2(data2$medianAnalyteVariance)
+
+# To be log2-transformed:
+toBeLog2Transformed <- c("# Samples", "# Analytes", 
+  "min(% NA in analytes)", "max(% NA in analytes)", 
+  "% Analytes with NAs", "% Samples with NAs",
+  "median(Variance of samples)", "median(Variance of analytes)", 
+  "Variance", "Kurtosis", "Skewness",
+  "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+  "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)",
+  "sd(Intensity w/ prob(NA) = 50% for sample)", 
+  "sd(Intensity w/ prob(NA) = 90% for sample)")
+
+
+colsWithNegativeNumbers <- colnames(data2[, sapply(data2, FUN = function(x) any(x <= 0, na.rm = TRUE))])
+# [1] "min(% NA in analytes)"                            "max(% NA in analytes)"                           
+# [3] "min(% NA in samples)"                             "max(% NA in samples)"                            
+# [5] "% NA"                                             "% Analytes with NAs"                             
+# [7] "% Samples with NAs"                               "Mean"                                            
+# [9] "Median"                                           "Min"                                             
+# [11] "Max"                                              "median(Variance of samples)"                     
+# [13] "median(Variance of analytes)"                     "Kurtosis"                                        
+# [15] "Skewness"                                         "Lin. coef. of Poly2(Means vs. Vars) (Analytes)"  
+# [17] "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)" "Corr(Mean vs. % NA) (Samples)"                   
+# [19] "Corr(Mean vs. % NA) (Analytes)"                   "sd(Intensity w/ prob(NA) = 50% for sample)"      
+# [21] "sd(Intensity w/ prob(NA) = 90% for sample)"      
+
+toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)
+# "# Samples"  "# Analytes" "Variance"  
+
+log2transform <- function(df, variable){
+  df[[paste0("log2(", variable, ")")]] <- log2(df[[variable]])
+  df[[variable]] <- NULL
+  df
+}
+
+for (var in toBeLog2Transformed){
+  # print(var)
+  data2 <- log2transform(df = data2, variable = var)
+}
 
 write.csv(data2, "data2.csv", row.names = FALSE)
-
 data2[sapply(data2, is.infinite)] <- NA
 
-data2 <- data2[ , !names(data2) %in% 
-      c("nSamples", "nAnalytes", "medianSampleVariance", "medianAnalyteVariance")]
-
-# dput(names(data2))
+dput(colnames(data2))
 
 data2.long <- reshape2::melt(data2)
 
-neworder <- c("dataType", 
-              "log2(nSamples)", "log2(nAnalytes)", 
-              "log2(medianSampleVariance)", "log2(medianAnalyteVariance)",
-              "median", "skewness", "prctPC1", "prctPC2",
-              "corSampleMeanNA", "corAnalyteMeanNA", "percNATotal")
+neworder <- c("Data type", 
+              "log2(# Analytes)", "log2(# Samples)", 
+              "Mean", "Median", "Min", "Max", 
+              "median(Variance of samples)", "median(Variance of analytes)", "log2(Variance)",
+              "Kurtosis", "Skewness", "% Dinstinct values",
+              "% NA",
+              "min(% NA in samples)", "max(% NA in samples)",  
+              "min(% NA in analytes)", "max(% NA in analytes)", 
+              "% Analytes with NAs", "% Samples with NAs", 
+              "sd(Intensity w/ prob(NA) = 50% for sample)", 
+              "sd(Intensity w/ prob(NA) = 90% for sample)",
+              "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)", 
+             "% Var. explained by PC1", "% Var. explained by PC2", 
+             "Agglom. coef. hierarch. analyte clustering",
+             "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+             "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)"
+)
+
 data2.long <- dplyr::arrange(dplyr::mutate(data2.long,
                                            variable=factor(variable,levels=neworder)), variable)
 
 
+
+
 numberOfDatasetsIncluded <- data2.long %>% 
   na.omit() %>%
-  group_by(dataType, variable) %>%  tally() %>%
+  group_by(`Data type`, variable) %>%  tally() %>%
   ungroup()
-colnames(numberOfDatasetsIncluded) <- c("dataType", "variable", "count")
+colnames(numberOfDatasetsIncluded) <- c("Data type", "variable", "count")
 write.csv(numberOfDatasetsIncluded, "numberOfDatasetsIncluded.csv", row.names = FALSE)
 
-# For each data characteristic: Median of the median of each data type
-medianValues <- data2.long %>%
-  group_by(dataType, variable) %>%  
-  summarise(medianValue = median(value, na.rm=T)) %>%
-  group_by(variable) %>%  
-  summarise(medianValue = median(medianValue, na.rm=T))
-write.csv(medianValues, "medianValues.csv", row.names = FALSE)
+plotBoxplots <- function(data2.long, fileNameAddition = "") {
+  # For each data characteristic: Median of the median of each data type
+  medianValues <- data2.long %>%
+    group_by(`Data type`, variable) %>%  
+    summarise(medianValue = median(value, na.rm=T)) %>%
+    group_by(variable) %>%  
+    summarise(medianValue = median(medianValue, na.rm=T))
+  write.csv(medianValues, paste0("medianValues", fileNameAddition,".csv"), row.names = FALSE)
+  
+  ggplot.charact <- ggplot(data2.long, aes(forcats::fct_rev(`Data type`), value)) +
+    geom_boxplot(aes(fill = `Data type`), alpha=0.5, outlier.size=0.5) +
+    coord_flip() +
+    xlab("") +
+    ylab("") +
+    geom_hline(aes(yintercept = medianValue), medianValues, colour = 'red') +
+    facet_wrap( ~ variable, scales = "free_x", ncol=7, strip.position = "bottom") +
+    ggplot2::theme_bw() +
+    #theme_minimal() + 
+    theme(panel.spacing.y=unit(1.5, "lines"),
+          legend.title = element_blank(), axis.text.y = element_text(hjust=0, face = "bold"), 
+          # legend.position="bottom",
+          legend.position = "none",
+          legend.justification = "left", legend.direction = "horizontal",
+          strip.text = element_text(face="bold", size = 8),
+          strip.placement = "outside",                      # Place facet labels outside x axis labels.
+          strip.background = element_blank(),  # Make facet label background white.
+          axis.title = element_blank()) +     
+    guides(fill = guide_legend(reverse = TRUE))
+  ggsave(file=paste0("boxplots", fileNameAddition, ".pdf"), ggplot.charact, height=10, width=18)
+}
 
-ggplot.charact <- ggplot(data2.long, aes(forcats::fct_rev(dataType), value)) +
-  geom_boxplot(aes(fill = dataType), alpha=0.5, outlier.size=0.5) +
-  coord_flip() +
-  xlab("") +
-  ylab("") +
-  geom_hline(aes(yintercept = medianValue), medianValues, colour = 'red') +
-  facet_wrap( ~ variable, scales = "free_x", ncol=2, strip.position = "bottom") +
-  ggplot2::theme_bw() +
-  #theme_minimal() + 
-  theme(panel.spacing.y=unit(1.5, "lines"),
-        legend.title = element_blank(), axis.text.y = element_text(hjust=0, face = "bold"), 
-        # legend.position="bottom",
-        legend.position = "none",
-        legend.justification = "left", legend.direction = "horizontal",
-        strip.text = element_text(face="bold"),
-        strip.placement = "outside",                      # Place facet labels outside x axis labels.
-        strip.background = element_blank(),  # Make facet label background white.
-        axis.title = element_blank()) +     
-  guides(fill = guide_legend(reverse = TRUE))
-ggsave(file=paste0("boxplots.pdf"), ggplot.charact, height=15, width=12)
-
-########################################################################
-# getNodeRule <- function(rules, terminal.id, roundDecim=NULL) {
-#   rule <- rules[[toString(terminal.id)]]
-#   rule.original <- rule
-#   #blub <- paste0("rule=", gsub("&", ", rule=", rule))
-#   rule <- gsub("&", ", ", rule)
-#   
-#   rule.split <- strsplit(rule, ",")[[1]]
-#   rule.split <- gsub(" $|^ ", "", rule.split)
-#   
-#   extract <- stringr::str_match(rule.split, "([0-9]{1,2}$)")
-#   rule.split <- rule.split[order(rank(strtoi(extract[,2])))]
-#   
-#   rule.df <- data.frame(rule=rule.split, name=rep(1, length(rule.split)), description=rep(1, length(rule.split)))
-#   
-#   if (!validatetools::is_infeasible(validate::validator(.data= rule.df))){
-#     simplifiedRules <- validatetools::remove_redundancy(validate::validator(.data= rule.df))
-#     
-#     str <- ""
-#     
-#     simplifiedRules <- lapply(simplifiedRules$rules, function(rule){rule@expr})
-#     for (rule1 in simplifiedRules){
-#       str.parts <-  gsub(" ", "", strsplit(toString(rule1), ",")[[1]])
-#       
-#       newstr <- paste0(str.parts[[2]], str.parts[[1]], str.parts[[3]])
-#       newstr <- gsub(" ", "", newstr, fixed = TRUE)
-#       
-#       if (grepl(paste0(">", toString(strtoi(str.parts[[3]])-1)), str)) {
-#         str <- paste0(gsub(paste0(str.parts[[2]], ">", toString(strtoi(str.parts[[3]])-1)), "", str))
-#         newstr <- gsub("<=", "==", newstr, fixed = TRUE)
-#       } else if (grepl(paste0("<=", toString(strtoi(str.parts[[3]])+1)), str)) {
-#         str <- paste0(gsub(paste0("<=", toString(strtoi(str.parts[[3]])+1)), paste0("==", toString(strtoi(str.parts[[3]])+1)), str))
-#         newstr <- ""
-#       } 
-#       
-#       if (str == ""){
-#         str <- paste0(str, newstr)
-#       } else {
-#         str <- paste0(str, " & ", newstr) 
-#       }
-#     }
-#     
-#     str <- gsub(" &$", "", str)
-#     str <- gsub("&  &", "&", str)
-#   } else {
-#     str <- rule.original
-#   }
-#   
-#   if (!is.null(roundDecim))
-#     str <- stringr::str_replace_all(str, "\\b\\d+\\.\\d+\\b", function(x) as.character(round(as.numeric(x), roundDecim)))
-#   
-#   return(str)
-# }
-# 
-# 
-# plotTerminalIdsBarplot <- function(terminal.id, tree, rules, dataTypeFreq.df){
-#   
-#   node.df <- data_party(tree, id = terminal.id)
-#   dataTypeFreq.df.node <- data.frame(table(node.df$dataType4))
-#   dataTypeFreq.df.node$totalFreq <- dataTypeFreq.df$Freq
-#   dataTypeFreq.df.node$percentage <- dataTypeFreq.df.node$Freq/dataTypeFreq.df$Freq * 100
-#   
-#   rule <- getNodeRule(rules, terminal.id, roundDecim = 2)
-#   
-#   gg <- ggplot(data = dataTypeFreq.df.node, aes(x = Var1, y = percentage)) +
-#     ggtitle(paste0("Node ", terminal.id, ",\n Rule: ", gsub("&", "&\n", rule))) +
-#     geom_bar(stat = "identity", aes(fill = Var1), show.legend = FALSE) +
-#     geom_text(aes(label = paste0(round(percentage, 2), " (", Freq, "/", totalFreq,")")), position=position_dodge(width=0.9), hjust=-0.15, angle=90) +
-#     xlab("") +
-#     ylab("% Total category size") +
-#     ylim(0, 100) +
-#     theme_bw() +
-#     theme(axis.text.x = element_text(angle = 45, hjust = 1),
-#           plot.title = element_text(size = 10))
-#   return(gg)
-# }
+plotBoxplots(data2.long, fileNameAddition = "_allDataTypes")
+# plotBoxplots(data2.long %>% filter(dataType != "metabolomics_MS"), fileNameAddition = "_metabolomics_MSRemoved")
 
 
-# library(partykit)
-# data <- dataset %>% group_by(dataType4) %>% filter(n() > 5) %>% ungroup
-# data$dataType4 <- as.factor(data$dataType4)
-# 
-# dataTypeFreq <- table(data$dataType4)
-# weights <- data.frame(1/(dataTypeFreq/sum(dataTypeFreq)))
-# colnames(weights) <- c("dataType4", "weights")
-# #weights$weights <- weights$weights/sum(weights$weights) 
-# data <- merge(x=data, y=weights, 
-#              by="dataType4", all.x=TRUE)
-# 
-# tree <- ctree(dataType4 ~ corColR.log2, data = data, weights = weights, logmincriterion = -1e-200)
-# # tree <- ctree(dataType4 ~ corColR.noLog2, data = data, mincriterion = 0.99)
-# 
-# pdf("ctree_percentages.pdf", width = 24, height = 10)
-# plot(tree, margins = c(8, 0, 0, 0), tp_args = list(rot = 45, just = c("right", "top"), text = "vertical"))
-# dev.off()
-# 
-# pvals <- unlist(nodeapply(tree, ids = nodeids(tree), function(n) info_node(n)$p.value))
-# pvals <- pvals[pvals <.05]
-# 
-# library(ggparty)
-# dataTypeFreq.df <- data.frame(dataTypeFreq)
-# gg <- ggparty(tree) +
-#   geom_edge() +
-#   geom_edge_label() +
-#   geom_node_label(line_list = list(aes(label = splitvar),
-#                                    aes(label = paste0("N=", nodesize, ", p", 
-#                                                       ifelse(pvals < .001, "<.001", paste0("=", round(pvals, 3)))), 
-#                                        size = 10)),
-#                   line_gpar = list(list(size = 13), 
-#                                    list(size = 10)), 
-#                   ids = "inner") +
-#   geom_node_label(aes(label = paste0("Node ", id, ", N = ", nodesize)),
-#                   ids = "terminal", nudge_y = 0.01, nudge_x = 0.01) # +
-#   # geom_node_plot(gglist = list(
-#   #   geom_bar(aes(x = "", fill = dataType4),
-#   #            position = position_dodge(), color = "black"),
-#   #   theme_minimal(),
-#   #   theme(panel.grid.major = element_blank(),
-#   #         panel.grid.minor = element_blank()),
-#   #   # scale_fill_manual(values = c("gray50", "gray80"), guide = FALSE),
-#   #   #scale_y_continuous(breaks = seq(0, 100, 20),
-#   #   #                   limits = c(0, 100)),
-#   #   xlab(""),
-#   #   ylab("Frequency"),
-#   #   geom_text(aes(x = "", group = dataType4,
-#   #                 label = stat(count)),
-#   #             stat = "count",
-#   #             position = position_dodge(0.9), vjust = -0.7)),
-#   #   shared_axis_labels = TRUE)
-# 
-# ggsave("ggparty_plot.pdf", plot=gg, width=20, height=10)
-# 
-# 
-# terminal.ids <- nodeids(tree, from = NULL, terminal = T)
-# rules <-  partykit:::.list.rules.party(tree)
-#   
-# plots <- lapply(terminal.ids, plotTerminalIdsBarplot, tree=tree, rules=rules, dataTypeFreq.df = dataTypeFreq.df)
-# 
-# library(gridExtra)
-# plots.comb <- do.call("grid.arrange", c(plots, ncol=length(plots)))
-# 
-# 
-# pdf("dataCharacteristics_ctree_ggparty.pdf", height= 15, width = 30)
-# 
-# #pdf(paste0("lmtree_", additionalString, "_", sett, "_scaled", scaled, "_", eval.measure, "_allDIA", allDIA, 
-# #           "_selectedDia", selectedDia, "_selectedSR", selectedSR, "_alpha", alpha, "_minsize", minsize, "_ggparty_plusBoxplot.pdf"), width=plotWidth, height = plotHeight)
-# #plot(g)
-# gridExtra::grid.arrange(gg,                                    # bar plot spaning two columns
-#                         plots.comb,                               # box plot and scatter plot
-#                         ncol = 1, nrow = 2, 
-#                         layout_matrix = rbind(c(1,1), 2))
-# 
-# dev.off()
+# y <- as.factor(data1$dataType)
+# levels(y)
+# x <- data %>% select(-dataType) %>% as.matrix()
+# # Fit parallel cumulative logit model
+# fit1 <- ordinalNet::ordinalNet(x, y, family="cumulative", link="logit",
+#                                parallelTerms=TRUE, nonparallelTerms=FALSE)
+# summary(fit1)
+# coefs <- data.frame(coef(fit1))
+
+
+
 
 
 session <- sessionInfo()
