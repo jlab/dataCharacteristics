@@ -353,7 +353,7 @@ plotPairsPlotForTypes <- function(df, groupColName = "Data type", colsForCorr = 
     df.group <- df[df[, groupColName] == group,]
     df.group <- df.group[, colsForCorr]
     colnames(df.group) <- stringr::str_wrap(colnames(df.group), width = 15)
-    pdf(paste0("ggpairs_", sub(" ", "_", group), addStr, ".pdf"), width = width, height = height)
+    pdf(paste0("ggpairs_", gsub(" ", "_", group), addStr, ".pdf"), width = width, height = height)
     if (smooth) {
       ggpairsObj <- ggpairs(df.group, 
                             lower = list(continuous = wrap("smooth", alpha = 0.1, size = 0.1)),
