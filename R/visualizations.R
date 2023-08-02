@@ -320,6 +320,9 @@ plotBoxplots <- function(data2.long, fileNameAddition = "") {
 plotBoxplots(data2.long, fileNameAddition = "_allDataTypes")
 # plotBoxplots(data2.long %>% filter(dataType != "metabolomics_MS"), fileNameAddition = "_metabolomics_MSRemoved")
 
+plotBoxplots(data2.long %>% na.omit() %>% dplyr::group_by(variable) %>% dplyr::mutate(value = rank(value)), 
+             fileNameAddition = "_allDataTypes_ranks")
+
 #############################################
 colorForCorValues <- function(data, mapping, method="spearman", use="pairwise", ...){
   
