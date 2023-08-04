@@ -153,7 +153,7 @@ Newnames <- c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in
               "Agglom. coef. hierarch. analyte clustering", 
               "sd(Intensity w/ prob(NA) = 50% for sample)", "sd(Intensity w/ prob(NA) = 90% for sample)", 
               "# Samples w/ intensityNAProb50.sd or intensityNAProb90.sd", 
-              "% Dinstinct values")
+              "% Distinct values")
 
 renameTable <- data.frame(Oldnames = Oldnames,
                           Newnames = Newnames)
@@ -179,7 +179,7 @@ boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analy
                                   "Variance", "Kurtosis", "Skewness", "% Var. explained by PC1", 
                                   "% Var. explained by PC2", "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
                                   "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", "Agglom. coef. hierarch. analyte clustering", 
-                                  "% Dinstinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
+                                  "% Distinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
                                 "sd(Intensity w/ prob(NA) = 50% for sample)", 
                                 "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
 
@@ -259,7 +259,7 @@ neworder <- c("Data type",
               "log2(# Analytes)", "log2(# Samples)", 
               "Mean", "Median", "Min", "Max", 
               "median(Variance of samples)", "median(Variance of analytes)", "log2(Variance)",
-              "Kurtosis", "Skewness", "% Dinstinct values",
+              "Kurtosis", "Skewness", "% Distinct values",
               "% NA",
               "min(% NA in samples)", "max(% NA in samples)",  
               "min(% NA in analytes)", "max(% NA in analytes)", 
@@ -399,7 +399,7 @@ plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = cols
 # "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
 # "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", 
 # "sd(Intensity w/ prob(NA) = 50% for sample)", "sd(Intensity w/ prob(NA) = 90% for sample)", 
-# "max(% NA in analytes)", "log2(# Samples)",  "% Dinstinct values",
+# "max(% NA in analytes)", "log2(# Samples)",  "% Distinct values",
 # "Agglom. coef. hierarch. analyte clustering", "log2(# Analytes)",
 # "Kurtosis", "Skewness",
 
@@ -407,7 +407,7 @@ plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = cols
 # One of: "Mean", "Median", "Min", "Max"
 # One of : "min(% NA in samples)", "max(% NA in samples)", "% NA", "% Analytes with NAs", "% Samples with NAs", 
 
-selForCorr <- c("% Dinstinct values", 
+selForCorr <- c("% Distinct values", 
                 "log2(# Analytes)", "log2(# Samples)", 
                 "Mean", "log2(Variance)", 
                 "% NA", "max(% NA in analytes)", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
