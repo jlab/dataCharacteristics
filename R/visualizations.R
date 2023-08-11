@@ -16,14 +16,80 @@ names(dataset) <- gsub(x = names(dataset), pattern = "\\.log2|\\.wNAs", replacem
 #names(dataset)[names(dataset) == 'corColR'] <- 'corSampleMeanNA'
 #names(dataset)[names(dataset) == 'corRowR'] <- 'corAnalyteMeanNA'
 
+scPipeline.df <- read.csv("scAnalysisPipelines.csv")
+
+# arrayExpressAbbrev <- c("AFFY", "AGIL", "ATMX", "CBIL", "ERAD", "GEOD", "GEUV", "HCAD", "JJRD", "MAXD",
+#                         "MEXP", "MIMR", "MTAB", "NASC", "TABM")
+# arrayExpressAbbrev <- c(paste0("E-", arrayExpressAbbrev), paste0("A-", arrayExpressAbbrev))
+# 
+
+
+# arrayExpressAbbrevE <- c("E-ATMX", 
+#                         "E-CURD",#
+#                         "E-CBIL",
+#                         "E-ENAD",#
+#                         "E-ERAD", 
+#                         "E-GEOD", 
+#                         "E-GEUV", "E-HCAD", "E-JJRD", "E-MAXD",
+#                         "E-MEXP", 
+#                         "E-MIMR", "E-MTAB", "E-NASC", "E-TABM")
+# arrayExpressAbbrevA <- c("A-AFFY", "A-AGIL", 
+#                         "A-GEOD", 
+#                         "A-MEXP")
+# arrayExpressAbbrev <- c(arrayExpressAbbrevE, arrayExpressAbbrevA)
+# # Find pairs of the elements in the vector arrayExpressAbbrev occurring at least once
+# arrayExpressAbbrev.coms <- data.frame(t(combn(arrayExpressAbbrev, 2)))
+# arrayExpressAbbrev.coms[, 3] <- paste0(arrayExpressAbbrev.coms[, 1], arrayExpressAbbrev.coms[, 2])
+# 
+# arrayExpressAbbrev.coms <-  arrayExpressAbbrev.coms[
+#   grepl("E-", arrayExpressAbbrev.coms[, 3]) & grepl("A-", arrayExpressAbbrev.coms[, 3]), ]
+# arrayExpressAbbrev.coms$V3 <- NULL
+# 
+# 
+# datasetMicroarrayOnly <- dataset %>% dplyr::filter(dataType == "microarray")
+# 
+# allIds <- datasetMicroarrayOnly$datasetID
+# 
+# existingArrayExpressAbbrev.coms.lst <- list()
+# for (i in seq(nrow(arrayExpressAbbrev.coms))) {
+#   res <- t(data.frame(lapply(datasetMicroarrayOnly$datasetID, function(x, strVec=strVec){
+#     checkIfAllStringsAreContained(strVec, str = x)
+#   }, strVec = arrayExpressAbbrev.coms[i,])))
+#   nCount <- sum(res[,1])
+# 
+#   allIds <- setdiff(allIds, datasetMicroarrayOnly$datasetID[res[,1]])
+#   existingArrayExpressAbbrev.coms.lst <- append(
+#     existingArrayExpressAbbrev.coms.lst, 
+#     list(c(comb = paste0(sort(arrayExpressAbbrev.coms[i,], decreasing = TRUE), collapse = ", "), nCount = nCount)))
+# }
+# 
+# microarray.df <- data.frame(t(sapply(existingArrayExpressAbbrev.coms.lst, c)))
+# microarray.df <- microarray.df[microarray.df$nCount != 0,]
+# 
+# 
+# eDataTypes <- c("RNAseq_fpkms_median", "RNAseq_raw","RNAseq_tpms_median", 
+#                 "sc_normalized", "sc_unnormalized"
+#                 )
+# 
+# #for (eDataType in eDataTypes){
+# eDataTypes.lst <- lapply(eDataTypes, function(eDataType) {
+#   eDataTypeOnly <- dataset %>% dplyr::filter(dataType == eDataType)
+#   countAbbrev <- sub("^([^\\-]+\\-[^\\-]+).*", "\\1", eDataTypeOnly$datasetID)
+#   table(countAbbrev)
+# })  
+# names(eDataTypes.lst) <- eDataTypes
+# eDataTypes.df <- do.call(rbind,lapply(eDataTypes.lst, data.frame))
+# eDataTypes.df$dataType <- sub("\\..*", "", row.names(eDataTypes.df))
+# 
+# eDataTypes.df <- reshape(eDataTypes.df, idvar = "countAbbrev", timevar = "dataType", direction = "wide")
+# row.names(eDataTypes.df) <- NULL
+
+
+# microbiome --> "16s", "wgs"
+# microarray --> separate by A, specifically AFFY subtype
+# bulk RNA-seq and scRNA-seq: separate by E (bulk--> GEOD, MTAB, other; sc --> GEOD, MTAB, other)
 dataset <- dataset %>% 
   mutate(
-    # dataType2 = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
-    #                            grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
-    #                            grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
-    #                            grepl("LC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_LC"),
-    #                            grepl("GC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_GC"),
-    #                            TRUE ~ dataType),
          # dataType3 = case_when(grepl("LC", datasetID, ignore.case = TRUE) & 
          #                         grepl("pos", datasetID, ignore.case = TRUE) & 
          #                         dataType == "metabolomics_MS" ~ paste0(dataType, "_LC_pos"),
@@ -45,13 +111,54 @@ dataset <- dataset %>%
                                grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
                                grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
                                dataType == "RNAseq_raw_undecorated" ~ "RNAseq_raw",
-                               TRUE ~ dataType) # ,
+                               TRUE ~ dataType),
+         dataTypeTmp = case_when(#grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
+                                    # grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
+                                    # grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
+                                    # dataType == "RNAseq_raw_undecorated" ~ "RNAseq_raw",
+           # metabolomics FIA, DI, GC, LC (HILIC, RP)
+           # proteomics expressionatlas: distinguish by four letter code?
+                                    grepl("LC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_LC"),
+                                    grepl("GC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_GC"),
+                                    dataType %in% c("sc_normalized", "sc_unnormalized") ~ paste0(dataType, "_", 
+                                                                         scPipeline.df$technology[match(gsub("\\..*", "", datasetID), 
+                                                                                                        scPipeline.df$projectId)]),
+                                    # grepl("RNAseq", dataType) | grepl("sc_", dataType) ~ paste0(dataType, "_", sub(".*-([A-Z]+)-.*", "\\1", datasetID)),
+                               grepl("RNAseq", dataType) ~ paste0(dataType, "_", sub(".*-([A-Z]+)-.*", "\\1", datasetID)),
+                               dataType == "microarray" ~ paste0(dataType, "_", sub(".*-([A-Z]+-\\d+).*", "\\1", datasetID)),
+                               dataType == "microbiome" ~ paste0(dataType, "_", ifelse(grepl("16s", datasetID, ignore.case = TRUE), "16S", "WGS")),
+                                    TRUE ~ dataType),# ,
+         dataType2 = case_when(
+           grepl("RNAseq", dataTypeTmp) & !(sub(".+_", "", dataTypeTmp) %in% c("GEOD", "MTAB"))
+                                                   ~ paste0(sub("_[^_]*$", "", dataTypeTmp), "_other"),
+           TRUE ~ dataTypeTmp),# ,
+         dataTypeTmp2 = case_when(
+           grepl("sc_", dataType2) ~ paste0(dataType2, "_", sub(".*-([A-Z]+)-.*", "\\1", datasetID)),
+                               TRUE ~ dataType2),
+         dataType3 = case_when(
+           grepl("sc_", dataTypeTmp2)  & !(sub(".+_", "", dataTypeTmp2) %in% c("GEOD", "MTAB")) ~ 
+             paste0(sub("_[^_]*$", "", dataTypeTmp2), "_other"),
+                               TRUE ~ dataTypeTmp2)#,
          # dataTypeMetabolomicsCombined = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
          #                                          grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
          #                                          grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
          #                                          grepl("metabolomics", dataType, ignore.case = TRUE) ~ "metabolomics",
          #                                          TRUE ~ dataType)
-         )
+         ) %>% select(-c(dataTypeTmp, dataTypeTmp2))
+
+
+
+
+json.df <- read.csv("microarray_metadata.csv")
+
+manufacturer.df <- json.df %>% dplyr::select("chipID", "Manufacturer")  %>%  mutate(dataType2 = paste0("microarray_", sub("A-", "", chipID))) %>% select(-chipID)
+
+dataset <- dplyr::left_join(dataset, manufacturer.df, by = "dataType2") %>%
+  mutate(dataType2 = case_when(grepl("microarray_", dataType2) ~ paste0("microarray_", Manufacturer),
+                       TRUE ~ dataType2),
+         dataType3 = case_when(grepl("microarray_", dataType3) ~ paste0("microarray_", Manufacturer),
+                               TRUE ~ dataType3)
+  ) %>% select(-Manufacturer)
 
 
 # Remove outliers: 
@@ -72,13 +179,26 @@ data <- data %>% dplyr::group_by(dataType) %>% filter(n() > 5) %>% ungroup
 
 write.csv(data, "datasets_results.csv", row.names = FALSE)
 write.csv(data.frame(table(data[, "dataType"])), "numberOfDatasets.csv", row.names = FALSE)
-######
 
-# data <- dataset %>% dplyr::select(-nNegativeNumbers)
-# Get %NA per column grouped by data type
-naPrctPerCol <- data %>%
-  dplyr::group_by(dataType) %>%
-  summarise_all(~sum(is.na(.))/n()*100)
+################################################################################
+# datasetMetabolomicsMSIDs <- dataset %>% filter(dataType == "metabolomics_MS") %>% select(datasetID) %>% unlist() %>% as.vector()
+# metabolightsMSProjectIDs <- sub("\\_.*", "", datasetMetabolomicsMSIDs)
+# tableMetabolightsMSProjectIDs <- data.frame(table(metabolightsMSProjectIDs))
+# 
+# datasetMetabolomicsNMRIDs <- dataset %>% filter(dataType == "metabolomics_NMR") %>% select(datasetID) %>% unlist() %>% as.vector()
+# metabolightsNMRProjectIDs <- sub("\\_.*", "", datasetMetabolomicsNMRIDs)
+# tableMetabolightsNMRProjectIDs <- data.frame(table(metabolightsNMRProjectIDs))
+
+
+################################################################################
+prideMeta.df <- read.csv("prideMeta.csv")
+################################################################################
+
+# # data <- dataset %>% dplyr::select(-nNegativeNumbers)
+# # Get %NA per column grouped by data type
+# naPrctPerCol <- data %>%
+#   dplyr::group_by(dataType) %>%
+#   summarise_all(~sum(is.na(.))/n()*100)
 
 # Remove "bimodalityRowCorr" because of too many NAs
 # data <- dataset %>% dplyr::select(-c(nNegativeNumbers, bimodalityRowCorr, bimodalityColCorr))
@@ -108,7 +228,91 @@ data <- data[,!(colnames(data) %in% seedCols)]
 data <- data[,!(colnames(data) %in% c("minRowNonNaNumber", "maxRowNonNaNumber"))] 
 
 write.csv(data, "datasets_results_clean.csv", row.names = FALSE)
-#############################################
+
+################################################################################
+# chipIDs <- paste0("A-", sub("microarray_", "", data %>% filter(dataType == "microarray") %>% select(dataType2) %>% unique() %>% as.vector() %>% unlist() %>% unname()))
+# modulos <- formatC(as.numeric(sub(".+-(.*)", "\\1", chipIDs)) %% 1000, width=3, flag="0")
+# fourLetterCodes <- sub("^(.*)-.*$", "\\1", chipIDs)
+# # jsons <- system(paste0('lftp ', "http://ftp.ebi.ac.uk/biostudies/nfs/A-AFFY-/",' <<<\'find| grep "\\\\.json$"; exit;\';'),intern=T);
+# 
+# ftpPath <- "http://ftp.ebi.ac.uk/biostudies/nfs/"
+# jsonPaths <- paste0(ftpPath, fourLetterCodes, "-/", modulos, "/", chipIDs, "/", chipIDs, ".json")
+# 
+# library("jsonlite")
+# 
+# jsonLst <- list()
+# for (jsonPath in jsonPaths) {
+#   print(jsonPath)
+#   jsonContent <- jsonlite::fromJSON(jsonPath)
+#   jsonAttributes <- jsonContent[["section"]][["attributes"]]
+#   jsonAttributesVec <- with(jsonAttributes, setNames(value, name))
+#   
+#   
+#   Organism <- ifelse("Organism" %in% names(jsonAttributesVec), 
+#                      jsonAttributesVec[["Organism"]],
+#                      NA)
+#   chipID <- gsub(".*/(.*).json", "\\1", jsonPath)
+#   
+#   jsonLst <- append(jsonLst, list(c(chipID = chipID,
+#                                     Title = jsonAttributesVec[["Title"]], 
+#                                     Description = jsonAttributesVec[["Description"]],
+#                                     Organism = Organism
+#   )))
+# }
+# 
+# json.df <- do.call(rbind.data.frame, jsonLst)
+# colnames(json.df) <- c("chipID", "Title", "Description", "Organism")
+# 
+# json.df <- json.df %>% mutate(
+#   Manufacturer = case_when(
+#     grepl("Affymetrix", Title) ~ "Affymetrix",
+#     grepl("Agilent", Title) ~ "Agilent",
+#     grepl("Illumina", Title) ~ "Illumina"),
+#   Organism2 = case_when(
+#     grepl("hugenefl", tolower(Title)) | grepl("HT_HG-U133_Plus_PM", Title) | grepl("human", tolower(Title)) ~ "Human",
+#     grepl("chicken", tolower(Title)) ~ "Chicken",
+#     grepl("rice", tolower(Title)) ~ "Rice",
+#     grepl("bovine", tolower(Title)) ~ "Bovine",
+#     grepl("mouse", tolower(Title)) ~ "Mouse",
+#     grepl("poplar", tolower(Title)) ~ "Poplar",
+#     grepl("rhesus macaque", tolower(Title)) ~ "Rhesus Macaque",
+#     grepl("canine", tolower(Title)) ~ "Canine",
+#     grepl("rat", tolower(Title)) ~ "Rat",
+#     grepl("drosophila", tolower(Title)) ~ "Drosophila",
+#     grepl("arabidopsis", tolower(Title)) ~ "Arabidopsis",
+#     grepl("murine", tolower(Title)) ~ "Murine",
+#     grepl("barley", tolower(Title)) ~ "Barley",
+#     grepl("zebrafish", tolower(Title)) ~ "Zebrafish",
+#     grepl("yeast", tolower(Title)) ~ "Yeast",
+#     grepl("c. elegans", tolower(Title)) ~ "Caenorhabditis elegans",
+#     grepl("porcine", tolower(Title)) ~ "Porcine",
+#     grepl("maize", tolower(Title)) ~ "Maize",
+#     grepl("grape", tolower(Title)) ~ "Grape"
+#   )
+# )
+# 
+# write.csv(json.df, "microarray_metadata.csv", row.names = FALSE)
+# 
+# microarrayFreq.df <- table(data %>% filter(dataType == "microarray") %>% 
+#                              select(dataType2)) %>% data.frame() %>%
+#   mutate(chipID = paste0("A-", sub("microarray_", "", dataType2)))
+# microarrayFreq.df <- dplyr::left_join(json.df, microarrayFreq.df)
+# 
+# organismFreq.df <- data.frame(sort(tapply(microarrayFreq.df$Freq, microarrayFreq.df$Organism2, FUN=sum), decreasing = TRUE))
+# colnames(organismFreq.df) <- "Freq"
+# 
+# microarrayFreq.df.sel <- microarrayFreq.df[, c("dataType2", "chipID", "Manufacturer", "Organism2")]
+# microarrayFreq.df.sel[microarrayFreq.df.sel$Organism2 %in% c("Mouse", "Rat"), ]$Organism2 <- "Murine"
+# colnames(microarrayFreq.df.sel) <- c("dataType2", "chipID", "Manufacturer", "Organism")
+# # attach information to ChipID, Manufacturer, Organism
+# data <- dplyr::left_join(data, microarrayFreq.df.sel, by = "dataType2")
+# data$chipFourLetterCode <- sub(".*-(.*)-.*", "\\1", data$chipID)
+# 
+# microarrayCols <- c("chipID", "Manufacturer", "Organism", "chipFourLetterCode")
+# 
+# write.csv(data, "datasets_results_clean_microararyManufacturerAdded.csv", row.names = FALSE)
+
+################################################################################
 
 # Rename Data types
 OldDataTypeNames <- c("metabolomics_MS", "metabolomics_NMR", "microarray", "microbiome", 
@@ -189,6 +393,9 @@ boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analy
 #                    "corSampleMeanNA", "corAnalyteMeanNA", "percNATotal")
 
 
+# data2 <- data[, c("Data type", 
+#                   boxplotCols, microarrayCols)]
+
 data2 <- data[, c("Data type", 
                   boxplotCols)]
 
@@ -250,6 +457,61 @@ naRelatedCols <- c("Corr(Mean vs. % NA) (Samples)",
 data2.complete <- data2[,!(colnames(data2) %in% naRelatedCols)]
 
 data2.complete <- data2.complete[complete.cases(data2.complete), ]
+
+#############################################
+
+# data2MicroarrayOnly <- data2 %>% dplyr::filter(`Data type` == "Microarray")
+# 
+# 
+# for (groupColName in microarrayCols){
+#   df <- data2MicroarrayOnly
+#   colsToRemove <- c("Data type", setdiff(microarrayCols, groupColName))
+#   df <- df %>% dplyr::select(-colsToRemove)
+#   df <- df[sapply(df, function(x) length(unique(na.omit(x)))) > 1]
+#   
+#   
+#   library(ggbiplot)
+#   pcaMethod <- "nipals"
+#   pdf(file = paste0("biplot_Microarray_", groupColName, ".pdf"), width = 20, height = 20)
+#   print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
+#                       groups= df[[groupColName]],
+#                       alpha = 0.3,
+#                       coordRatio = 1,
+#                       pcaMethod = pcaMethod,
+#                       xlimLower = -10, xlimUpper = 10,
+#                       ylimLower = -10, ylimUpper = 10,
+#                       facetZoom = FALSE, 
+#                       ellipse = TRUE) 
+#         # + theme(legend.position = "none")
+#   )
+#   dev.off()
+#   
+#   groups= df[[groupColName]]
+#   
+#   pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method=pcaMethod, nPcs=4, center=TRUE
+#                          , scale = "uv")
+#   dat <- merge(pcaMethods::scores(pca), df, by=0)
+#   
+#   library(plotly)
+#   library(htmlwidgets)
+#   fig <- plot_ly(dat, x = ~PC1, y = ~PC2, z = ~PC3, 
+#                  color = ~as.factor(dat[[groupColName]]), 
+#                  type="scatter3d", mode="markers",
+#                  #colors = c('#636EFA','#EF553B') , 
+#                  marker = list(size = 2)
+#                  # , alpha = 0.75
+#   ) #%>%
+#   # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
+#   fig <- fig %>%
+#     layout(
+#       title = "3D PCA",
+#       scene = list(bgcolor = "#e5ecf6"
+#       )
+#     )
+#   
+#   htmlwidgets::saveWidget(fig, paste0("plotly_", pcaMethod,"_Microarray_", groupColName,".html"), selfcontained = F, libdir = "lib")
+# }
+
 
 #############################################
 
@@ -407,11 +669,12 @@ plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = cols
 # One of: "Mean", "Median", "Min", "Max"
 # One of : "min(% NA in samples)", "max(% NA in samples)", "% NA", "% Analytes with NAs", "% Samples with NAs", 
 
+data2WAbsSkewness <- data2 %>% dplyr::mutate(`|Skewness|` = abs(Skewness))
 selForCorr <- c("% Distinct values", 
                 "log2(# Analytes)", "log2(# Samples)", 
                 "Mean", "log2(Variance)", 
                 "% NA", "max(% NA in analytes)", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
-                "Skewness", "Kurtosis", 
+                "Skewness", "|Skewness|", "Kurtosis", 
                 "% Var. explained by PC1", 
                 "% Var. explained by PC2",  
                 "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", 
@@ -422,7 +685,7 @@ selForCorr <- c("% Distinct values",
 # selForCorr <- selForCorr[order(match(selForCorr, colnames(data2)))]
 
 corrMethod <- "spearman"
-plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = selForCorr, 
+plotPairsPlotForTypes(df = data2WAbsSkewness, groupColName = "Data type", colsForCorr = selForCorr, 
                       corrMethod = corrMethod, width = 14, height = 14, addStr = paste0("_selectedCols_", corrMethod)) 
 
 
@@ -456,7 +719,8 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
                              facetZoom = TRUE, 
                              xlimLower = NA, xlimUpper = NA,
                              ylimLower = NA, ylimUpper = NA,
-                             PCchoices = 1:2) {
+                             PCchoices = 1:2,
+                          ellipse = TRUE) {
   # See https://stackoverflow.com/a/49788251
   #   # devtools::install_github("vqv/ggbiplot")
 
@@ -484,7 +748,7 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
                            choices = PCchoices,
                            obs.scale = 1, 
                            var.scale=1,
-                           ellipse=T,
+                           ellipse=ellipse,
                            circle=F,
                            varname.size=3,
                            var.axes=T,
@@ -625,6 +889,100 @@ plotPCABiplots(df = data2, groupColName = "Data type", addStr = "", pcaMethod = 
 
 #####################
 
+dataScUnnormalizedOnly <- data %>% dplyr::filter(`Data type` == "scRNA-seq (unnormalized)")
+# df <- dataScUnnormalizedOnly %>% dplyr::select(-"Dataset ID")
+# groupColName <- "Data type"
+# pcaMethod <- "nipals"
+# 
+# library(ggbiplot)
+# df <- dataScUnnormalizedOnly %>% dplyr::select(-c("Dataset ID", "Data type"))
+# df <- df %>% dplyr::select(-names(df[, sapply(df, function(v) var(v, na.rm=TRUE)==0)]))
+# 
+# iris_dummy<-df 
+# iris_dummy[is.na(iris_dummy)]<-7777 #swap out your NAs with a dummy number so prcomp will run
+# pca.obj <- prcomp(iris_dummy, center=TRUE, scale.=TRUE)
+# 
+# # scale: One of "UV" (unit variance a=a/\sigma_{a}), 
+# # "vector" (vector normalisation b=b/|b|), 
+# # "pareto" (sqrt UV) or "none" 
+# # to indicate which scaling should be used to scale the matrix with aa variables and b samples. 
+# pca.obj2 <- pcaMethods::pca(df, method=pcaMethod, nPcs=4, center=TRUE
+#                             , scale = "uv"
+# )
+# 
+# loadings <- pca.obj2@loadings
+# 
+# pca.obj$x<-pca.obj2@scores 
+# pca.obj$rotation<-pca.obj2@loadings 
+# pca.obj$sdev<-pca.obj2@sDev
+# pca.obj$center<-pca.obj2@center
+# pca.obj$scale<-pca.obj2@scale
+# 
+# P2 <- ggbiplot::ggbiplot(pca.obj,
+#                          choices = 1:2,
+#                          obs.scale = 1, 
+#                          var.scale=1,
+#                          ellipse=T,
+#                          circle=F,
+#                          varname.size=2,
+#                          var.axes=T,
+#                          # groups=groups, 
+#                          alpha=0)  +
+#   scale_color_discrete(name = '') 
+# 
+# P2 <- P2 + xlim(c(-8, 8)) + ylim(c(-5, 3))
+# 
+# 
+# P2 <- P2 + theme(legend.direction ='horizontal', 
+#                  legend.position = 'bottom')
+# 
+# groups <- factor(gsub(".*-(.*)-.*", "\\1", dataScUnnormalizedOnly$`Dataset ID`))
+# summary(groups)
+# P2$layers <- c(geom_point(aes(colour=groups), cex=1, alpha = 0.5), P2$layers)
+# print(P2)
+# 
+# 
+# 
+# dataScUnnormalizedOnlyMTAB <- dataScUnnormalizedOnly %>% filter(grepl("MTAB", `Dataset ID`))
+# # dataScUnnormalizedOnlyCURD <- dataScUnnormalizedOnly %>% filter(grepl("CURD", `Dataset ID`))
+# meanMTAB <- data.frame(mean = dataScUnnormalizedOnlyMTAB$Mean, 
+#                        ID = as.numeric(gsub(".*?-.*?-(.*?)\\..*", "\\1", dataScUnnormalizedOnlyMTAB$`Dataset ID`)) )
+# 
+# meanMTAB$above2 <- meanMTAB$mean > 1
+# 
+# p.absolute <- ggplot(meanMTAB, aes(x=above2, y=ID)) + 
+#   geom_violin(alpha=0.5, scale = "width") +
+#   geom_boxplot(width=0.5, alpha=0.25, outlier.size=0.5) +
+#   geom_jitter(shape=16, position=position_jitter(0.2))
+# 
+# p.rank <- ggplot(meanMTAB, aes(x=above2, y=rank(ID))) + 
+#   geom_violin(alpha=0.5, scale = "width") +
+#   geom_boxplot(width=0.5, alpha=0.25, outlier.size=0.5) +
+#   geom_jitter(shape=16, position=position_jitter(0.2))
+# 
+# p.absolute
+# p.rank
+# 
+# ggplot(meanMTAB, aes(x=mean, y=ID)) + 
+#   geom_point(alpha=0.5, scale = "width")
+# 
+# ggplot(meanMTAB, aes(x=mean, y=rank(ID))) + 
+#   geom_point(alpha=0.5, scale = "width")
+# 
+# 
+# length(unique(dataScUnnormalizedOnly$`Dataset ID`))
+
+
+scPipeline.df <- read.csv("scAnalysisPipelines.csv")
+meanSc <- data.frame(mean = dataScUnnormalizedOnly$Mean, 
+                     nSamples = dataScUnnormalizedOnly$`# Samples`,
+                     projectId =  gsub("\\..*", "", dataScUnnormalizedOnly$`Dataset ID`))
+
+meanSc <- dplyr::left_join(meanSc, scPipeline.df)
+ggplot(meanSc, aes(x=mean, y=log2(nSamples))) + 
+  geom_point(aes(color = technology), alpha=0.5, scale = "width")
+
+#####################
 
 session <- sessionInfo()
 sink(paste0("visualizations_sessionInfo.txt"))
