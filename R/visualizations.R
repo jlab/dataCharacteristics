@@ -108,18 +108,28 @@ dataset <- dataset %>%
          #                       grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
          #                       TRUE ~ dataType),
          dataType = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
-                               grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
-                               grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
-                               dataType == "RNAseq_raw_undecorated" ~ "RNAseq_raw",
-                               TRUE ~ dataType),
+                              grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
+                              grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
+                              datasetID == "MTBLS242_m_mtbls242_v2_maf.tsv" ~ "metabolomics_NMR", 
+                              dataType == "RNAseq_raw_undecorated" ~ "RNAseq_raw",
+                              TRUE ~ dataType),
          dataTypeTmp = case_when(#grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
                                     # grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
                                     # grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
                                     # dataType == "RNAseq_raw_undecorated" ~ "RNAseq_raw",
            # metabolomics FIA, DI, GC, LC (HILIC, RP)
-           # proteomics expressionatlas: distinguish by four letter code?
-                                    grepl("LC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_LC"),
+           # "MALDI", "MSImaging", "DESI"  --> otherIonization
+           # if datType2 undefined check in technology for "DI-" --> "DI", "CE-" --> "CE", "FIA-" --> "FIA", "GC-" --> "GC", "LC-" --> "LC", "NMR" --> "NMR"
+           # "metabolomics_MS_Undefined" --> remove "NMR" from technology
+           # Separate GC to GC, SPME-GC and GCxGC ?
+           # check if categorization in MS and NMR is correct
+           # Add negative and positive?
                                     grepl("GC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_GC"),
+                                    grepl("LC|HILIC|RP", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_LC"),
+                                    grepl("FIA", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_FIA"),
+                                    grepl("MALDI|MSImaging|DESI", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_otherIonization"),
+                                    grepl("_DI-", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_DI"),
+                                    dataType == "metabolomics_MS" ~ paste0(dataType, "_Undefined"),
                                     dataType %in% c("sc_normalized", "sc_unnormalized") ~ paste0(dataType, "_", 
                                                                          scPipeline.df$technology[match(gsub("\\..*", "", datasetID), 
                                                                                                         scPipeline.df$projectId)]),
@@ -130,14 +140,14 @@ dataset <- dataset %>%
                                     TRUE ~ dataType),# ,
          dataType2 = case_when(
            grepl("RNAseq", dataTypeTmp) & !(sub(".+_", "", dataTypeTmp) %in% c("GEOD", "MTAB"))
-                                                   ~ paste0(sub("_[^_]*$", "", dataTypeTmp), "_other"),
+                                                   ~ paste0(sub("_[^_]*$", "", dataTypeTmp), "_Other"),
            TRUE ~ dataTypeTmp),# ,
          dataTypeTmp2 = case_when(
            grepl("sc_", dataType2) ~ paste0(dataType2, "_", sub(".*-([A-Z]+)-.*", "\\1", datasetID)),
                                TRUE ~ dataType2),
          dataType3 = case_when(
            grepl("sc_", dataTypeTmp2)  & !(sub(".+_", "", dataTypeTmp2) %in% c("GEOD", "MTAB")) ~ 
-             paste0(sub("_[^_]*$", "", dataTypeTmp2), "_other"),
+             paste0(sub("_[^_]*$", "", dataTypeTmp2), "_Other"),
                                TRUE ~ dataTypeTmp2)#,
          # dataTypeMetabolomicsCombined = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
          #                                          grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
@@ -145,8 +155,6 @@ dataset <- dataset %>%
          #                                          grepl("metabolomics", dataType, ignore.case = TRUE) ~ "metabolomics",
          #                                          TRUE ~ dataType)
          ) %>% select(-c(dataTypeTmp, dataTypeTmp2))
-
-
 
 
 json.df <- read.csv("microarray_metadata.csv")
@@ -161,6 +169,156 @@ dataset <- dplyr::left_join(dataset, manufacturer.df, by = "dataType2") %>%
   ) %>% select(-Manufacturer)
 
 
+prideMeta.df <- read.csv("proteomicsPride_metadata.csv")
+
+includedPrideIDs <- sort(unique(sub("^(.*?)_.*$", "\\1", dataset[grepl("_pride_", dataset$dataType),]$datasetID)))
+prideMeta.df.forIncludedPrideIDs <- prideMeta.df[prideMeta.df$prideID %in% includedPrideIDs, ]
+setdiff(includedPrideIDs, prideMeta.df.forIncludedPrideIDs$prideID)
+# [1] "PXD021464" "PXD022721" "PXD024748" "PXD024937"
+# Add information manually for PXDs that could  not be found automatically
+prideMeta.df.forIncludedPrideIDs <- rbind(prideMeta.df.forIncludedPrideIDs, 
+                                          c(prideID = "PXD021464", 
+                                            tax = "Mus musculus (mouse)", 
+                                            organismParts = "Hippocampal cell line",
+                                            experimentTypes = "Shotgun proteomics",
+                                            instruments = "LTQ Orbitrap Velos"),
+                                          c(prideID = "PXD022721", 
+                                            tax = "Homo sapiens (human)", 
+                                            organismParts = "Cell culture",
+                                            experimentTypes = "Shotgun proteomics",
+                                            instruments = "LTQ Orbitrap Elite;Orbitrap Fusion;Q Exactive HF"),
+                                          c(prideID = "PXD024748", 
+                                            tax = "Homo sapiens (human)", 
+                                            organismParts = "Substantia nigra",
+                                            experimentTypes = "Shotgun proteomics",
+                                            instruments = "LTQ Orbitrap Velos"),
+                                          c(prideID = "PXD024937", 
+                                            tax = "Homo sapiens (human)", 
+                                            organismParts = "Brain",
+                                            experimentTypes = "Shotgun proteomics",
+                                            instruments = "Q Exactive")
+                                          )
+prideMeta.df.forIncludedPrideIDs$instruments <- gsub(";MaxQuant", "", prideMeta.df.forIncludedPrideIDs$instruments)
+write.csv(data.frame(instrument = sort(unique(unlist(strsplit(prideMeta.df.forIncludedPrideIDs$instruments, ";"))))), 
+          "prideMetaInstruments.csv",
+          row.names = FALSE)
+
+prideMetaInstrumentsManufacturerAdded.df <- read.csv("prideMetaInstruments_manufacturerAdded.csv")
+
+
+
+
+translateTermsInColumns <- function(oldAndID.df, translation.df, oldCol = "old", idCol = "ID", multipleHandling = "Multiple") {
+  replaced <- strsplit(oldAndID.df[,oldCol], ";")
+  for (row in seq(nrow(translation.df))) {
+    replaced <- rapply(replaced, function(x){
+      gsub(paste0("^", translation.df[row, ]$old, "$"),
+           translation.df[row, ]$new, x)
+    }, how = "list")
+  }
+  
+  replaced2 <- rapply(replaced, function(x){ifelse(length(unique(x))>1, multipleHandling, unique(x))
+  }, how = "list")
+  
+  replaced2.df <- data.frame(ID = oldAndID.df[,idCol], old = oldAndID.df[,oldCol], new = unlist(replaced2))
+  replaced2.df
+}
+
+
+prideTranslation.df <- translateTermsInColumns(oldAndID.df = prideMeta.df.forIncludedPrideIDs, 
+                                               translation.df = prideMetaInstrumentsManufacturerAdded.df %>%
+                                                 dplyr::rename("old" = "instrument", "new" = "manufacturer"), 
+                                               oldCol = "instruments", idCol = "prideID", 
+                                               multipleHandling = "Multiple")
+  
+  
+
+# replaced <- strsplit(prideMeta.df.forIncludedPrideIDs$instruments, ";")
+# for (row in seq(nrow(prideMetaInstrumentsManufacturerAdded.df))) {
+# 
+#   replaced <- rapply(replaced, function(x){
+#     gsub(paste0("^", prideMetaInstrumentsManufacturerAdded.df[row, ]$instrument, "$"),
+#          prideMetaInstrumentsManufacturerAdded.df[row, ]$manufacturer, x)
+#   }, how = "list")
+# }
+# 
+# replaced2 <- rapply(replaced, function(x){ifelse(length(unique(x))>1, "Multiple", unique(x))
+# }, how = "list")
+# 
+# replaced2.df <- data.frame(prideID = prideMeta.df.forIncludedPrideIDs$prideID, manufacturer = unlist(replaced2))
+# 
+# prideMeta.df.forIncludedPrideIDs <- dplyr::left_join(prideMeta.df.forIncludedPrideIDs, replaced2.df)
+
+colnames(prideTranslation.df) <- c("prideID", "instrument", "manufacturer")
+
+prideMeta.df.forIncludedPrideIDs <- dplyr::left_join(prideMeta.df.forIncludedPrideIDs, prideTranslation.df, by = join_by(prideID))
+
+dataset <- dataset %>% 
+  mutate(dataType2 = case_when(grepl("_pride_", dataType) ~ 
+                                    paste0(dataType2, "_", 
+                                           prideMeta.df.forIncludedPrideIDs$manufacturer[
+    match(sub("^(.*?)_.*$", "\\1", datasetID), 
+          prideMeta.df.forIncludedPrideIDs$prideID)]),
+            TRUE ~ dataType2),
+    dataType3 = case_when(grepl("_pride_", dataType) ~ 
+                            paste0(dataType3, "_", 
+                                   prideMeta.df.forIncludedPrideIDs$manufacturer[
+                                     match(sub("^(.*?)_.*$", "\\1", datasetID), 
+                                           prideMeta.df.forIncludedPrideIDs$prideID)]),
+                          TRUE ~ dataType3)
+    )
+
+
+metabolomicsMeta.df <- read.csv("metabolomics_metadata.csv")
+metabolomicsDatasets <- dataset %>% 
+  filter(dataType %in% c("metabolomics_MS", "metabolomics_NMR")) %>%
+  dplyr::select(datasetID, dataType, dataType2) %>%
+  mutate(accession = sub("^(.*?)_.*$", "\\1", datasetID)) %>%
+  left_join(metabolomicsMeta.df, by = join_by(accession == accession))
+
+
+
+
+replaced <- strsplit(metabolomicsDatasets$technology, ";")
+
+replaced2 <- rapply(replaced, function(x){
+  x[grepl("LC|UPLD", x)] <- "LC"
+  x[grepl("GC", x)] <- "GC"
+  x[grepl("FIA", x)] <- "FIA"
+  x[grepl("DI-", x)] <- "DI"
+  x[grepl("CE-", x)] <- "CE"
+  x[grepl("NMR|MRS", x)] <- "NMR"
+  x[grepl("MALDI|DART", x)] <- "otherIonization"
+  x[grepl("Insufficient data supplied", x)] <- NA
+  x <- sort(unique(x))
+  #if (length(x) > 1) x <- NA
+  x
+  #ifelse(length(unique(x))>1, multipleHandling, unique(x))
+}, how = "list") 
+
+replaced2 <- lapply(replaced2, function(x) paste0(x, collapse = ";"))
+
+metabolomicsTranslation.df <- cbind(metabolomicsDatasets %>% select(- dataType, accession), technology2 = unlist(replaced2))
+
+metabolomicsTranslation.df[grepl(";", metabolomicsTranslation.df$technology2) | metabolomicsTranslation.df$technology2 =="", ]$technology2 <- NA
+metabolomicsTranslation.df <- metabolomicsTranslation.df %>% mutate(
+  dataType2New = case_when(dataType2 == "metabolomics_MS_Undefined" & !is.na(technology2) ~ paste0("metabolomics_MS_", technology2), 
+                          TRUE ~ dataType2)
+)
+
+# MTBLS440 --> LC
+# MTBLS728 --> LC
+metabolomicsTranslation.df[metabolomicsTranslation.df$accession %in% c("MTBLS440", "MTBLS728"),]$dataType2New <- "metabolomics_MS_LC"
+dataset <- dataset %>%
+  mutate(dataType2 = case_when(grepl("metabolomics_", dataType) ~ metabolomicsTranslation.df$dataType2New[
+                                          match(datasetID, 
+                                                metabolomicsTranslation.df$datasetID)],
+                               TRUE ~ dataType2),
+         dataType3 = case_when(grepl("metabolomics_", dataType) ~ metabolomicsTranslation.df$dataType2New[
+           match(datasetID, 
+                 metabolomicsTranslation.df$datasetID)],
+           TRUE ~ dataType3))
+
 # Remove outliers: 
 # E-GEOD-152766.aggregated_filtered_counts.mtx, (also E-GEOD-152766.aggregated_filtered_normalised_counts.mtx to make
 # numbers of normalized and unnormalized sc datasets even.)
@@ -170,6 +328,10 @@ data <- dataset %>% dplyr::filter(!(datasetID %in% c("E-GEOD-152766.aggregated_f
                                                      "E-GEOD-152766.aggregated_filtered_normalised_counts.mtx",
                                                    "MTBLS407_m_MTBLS407_21022_metabolite_profiling_mass_spectrometry_v2_maf.tsv",
                                                    "MTBLS407_m_MTBLS407_21548_metabolite_profiling_mass_spectrometry_v2_maf.tsv")))
+
+
+# Check for duplicates
+data.duplicateRowsOnly <- data[which(duplicated(data %>% select(-datasetID)) | duplicated(data %>% select(-datasetID), fromLast = TRUE)), ]
 
 
 # selectedDataTypeCol <- "dataType"
@@ -191,7 +353,6 @@ write.csv(data.frame(table(data[, "dataType"])), "numberOfDatasets.csv", row.nam
 
 
 ################################################################################
-prideMeta.df <- read.csv("prideMeta.csv")
 ################################################################################
 
 # # data <- dataset %>% dplyr::select(-nNegativeNumbers)
@@ -321,11 +482,48 @@ OldDataTypeNames <- c("metabolomics_MS", "metabolomics_NMR", "microarray", "micr
                       "RNAseq_fpkms_median", "RNAseq_raw", "RNAseq_tpms_median", "sc_normalized", 
                       "sc_unnormalized", "scProteomics")
 
+
+# OldDataTypeNames <- c("metabolomics_MS", "metabolomics_MS_GC", "metabolomics_MS_LC", 
+#   "metabolomics_NMR", "microarray_Affymetrix", "microarray_Illumina", 
+#   "microarray_Agilent", "microbiome_16S", "microbiome_WGS", "proteomics_expressionatlas_iBAQ", 
+#   "proteomics_expressionatlas_Intensity", "proteomics_expressionatlas_LFQ", 
+#   "proteomics_pride_LFQ_Thermo", "proteomics_pride_Intensity_Thermo", 
+#   "proteomics_pride_iBAQ_Thermo", "proteomics_pride_LFQ_Multiple", 
+#   "proteomics_pride_iBAQ_Multiple", "proteomics_pride_Intensity_Multiple", 
+#   "proteomics_pride_Intensity_Bruker", "proteomics_pride_LFQ_Agilent", 
+#   "proteomics_pride_Intensity_Agilent", "proteomics_pride_LFQ_Bruker", 
+#   "proteomics_pride_LFQ_SCIEX", "proteomics_pride_Intensity_SCIEX", 
+#   "proteomics_pride_iBAQ_SCIEX", "proteomics_pride_iBAQ_Bruker", 
+#   "proteomics_pride_iBAQ_Agilent", "RNAseq_fpkms_median_Other", 
+#   "RNAseq_fpkms_median_GEOD", "RNAseq_fpkms_median_MTAB", "RNAseq_raw_Other", 
+#   "RNAseq_raw_GEOD", "RNAseq_raw_MTAB", "RNAseq_tpms_median_Other", 
+#   "RNAseq_tpms_median_GEOD", "RNAseq_tpms_median_MTAB", "sc_normalized_SMART-like", 
+#   "sc_normalized_Droplet-based", "sc_unnormalized_SMART-like", 
+#   "sc_unnormalized_Droplet-based", "scProteomics")
+
 NewDataTypeNames <- c("Metabolomics (MS)", "Metabolomics (NMR)", "Microarray", "Microbiome", 
               "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)", 
               "Proteomics (LFQ, PRIDE)", "Proteomics (Intensity, PRIDE)", "Proteomics (iBAQ, PRIDE)", 
               "RNA-seq (FPKM)", "RNA-seq (raw)", "RNA-seq (TPM)", "scRNA-seq (normalized)", 
               "scRNA-seq (unnormalized)", "scProteomics")
+
+# NewDataTypeNames <- c("Metabolomics (Undefined-MS)", "Metabolomics (GC-MS)", "Metabolomics (LC-MS)", 
+#                       "Metabolomics (NMR)", "Microarray (Affymetrix)", "Microarray (Illumina)", 
+#                       "Microarray (Agilent)", "Microbiome (16S)", "Microbiome (WGS)", "Proteomics (iBAQ, Expression Atlas)", 
+#                       "Proteomics (Intensity, Expression Atlas)", "Proteomics (LFQ, Expression Atlas)", 
+#                       "Proteomics (LFQ, PRIDE, Thermo)", "Proteomics (Intensity, PRIDE, Thermo)", 
+#                       "Proteomics (iBAQ, PRIDE, Thermo)", "Proteomics (LFQ, PRIDE, Multiple)", 
+#                       "Proteomics (iBAQ, PRIDE, Multiple)", "Proteomics (Intensity, PRIDE, Multiple)", 
+#                       "Proteomics (Intensity, PRIDE, Bruker)", "Proteomics (LFQ, PRIDE, Agilent)", 
+#                       "Proteomics (Intensity, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Bruker)", 
+#                       "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (Intensity, PRIDE, SCIEX)", 
+#                       "Proteomics (iBAQ, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, Bruker)", 
+#                       "Proteomics (iBAQ, PRIDE, Agilent)", "RNA-seq (FPKM, Other)", 
+#                       "RNA-seq (FPKM, GEOD)", "RNA-seq (FPKM, MTAB)", "RNA-seq (raw, Other)", 
+#                       "RNA-seq (raw, GEOD)", "RNA-seq (raw, MTAB)", "RNA-seq (TPM, Other)", 
+#                       "RNA-seq (TPM, GEOD)", "RNA-seq (TPM, MTAB)", "scRNA-seq (SMART-like, normalized)", 
+#                       "scRNA-seq (Droplet-based, normalized)", "scRNA-seq (SMART-like, unnormalized)", 
+#                       "scRNA-seq (Droplet-based, unnormalized)", "scProteomics")
 
 renameDataTypeTable <- data.frame(OldDataTypeNames = OldDataTypeNames,
                                   NewDataTypeNames = NewDataTypeNames)
@@ -374,6 +572,25 @@ data$`Data type` <- factor(data$`Data type`, levels = c( "Metabolomics (NMR)", "
                                                   "scRNA-seq (unnormalized)",
                                                   "scRNA-seq (normalized)", 
                                                   "Microbiome"))
+
+
+data$`Data type` <- factor(data$`Data type`, levels = c("Metabolomics (NMR)", "Metabolomics (Undefined-MS)", "Metabolomics (GC-MS)", "Metabolomics (LC-MS)",
+                                                        "Microarray (Affymetrix)", "Microarray (Illumina)",
+                                                        "Microarray (Agilent)", "Microbiome (16S)", "Microbiome (WGS)", "Proteomics (iBAQ, Expression Atlas)",
+                                                        "Proteomics (Intensity, Expression Atlas)", "Proteomics (LFQ, Expression Atlas)",
+                                                        "Proteomics (LFQ, PRIDE, Thermo)", "Proteomics (Intensity, PRIDE, Thermo)",
+                                                        "Proteomics (iBAQ, PRIDE, Thermo)", "Proteomics (LFQ, PRIDE, Multiple)",
+                                                        "Proteomics (iBAQ, PRIDE, Multiple)", "Proteomics (Intensity, PRIDE, Multiple)",
+                                                        "Proteomics (Intensity, PRIDE, Bruker)", "Proteomics (LFQ, PRIDE, Agilent)",
+                                                        "Proteomics (Intensity, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Bruker)",
+                                                        "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (Intensity, PRIDE, SCIEX)",
+                                                        "Proteomics (iBAQ, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, Bruker)",
+                                                        "Proteomics (iBAQ, PRIDE, Agilent)", "RNA-seq (FPKM, Other)",
+                                                        "RNA-seq (FPKM, GEOD)", "RNA-seq (FPKM, MTAB)", "RNA-seq (raw, Other)",
+                                                        "RNA-seq (raw, GEOD)", "RNA-seq (raw, MTAB)", "RNA-seq (TPM, Other)",
+                                                        "RNA-seq (TPM, GEOD)", "RNA-seq (TPM, MTAB)", "scRNA-seq (SMART-like, normalized)",
+                                                        "scRNA-seq (Droplet-based, normalized)", "scRNA-seq (SMART-like, unnormalized)",
+                                                        "scRNA-seq (Droplet-based, unnormalized)", "scProteomics"))
 
 #############################################
 boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
