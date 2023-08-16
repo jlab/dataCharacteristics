@@ -9,163 +9,64 @@ library(stringr)
 theme_set(theme_bw())
 
 dataset <- ldply(list.files("20230614_results", pattern = ".csv", full.names = TRUE), read.csv, header=TRUE)
-#dataset <- plyr::ldply(list.files(pattern = ".csv", full.names = TRUE), read.csv, header=TRUE)
 dataset <- dataset[dataset$nSamples>0,]
 dataset <- dataset[dataset$variance>0,]
-names(dataset) <- gsub(x = names(dataset), pattern = "\\.log2|\\.wNAs", replacement = "")  
-#names(dataset)[names(dataset) == 'corColR'] <- 'corSampleMeanNA'
-#names(dataset)[names(dataset) == 'corRowR'] <- 'corAnalyteMeanNA'
+dataset$prctPC1.wNAs.log2 <- 100 * dataset$prctPC1.wNAs.log2
+dataset$prctPC2.wNAs.log2 <- 100 * dataset$prctPC2.wNAs.log2
 
+names(dataset) <- gsub(x = names(dataset), pattern = "\\.log2|\\.wNAs", replacement = "")  
 scPipeline.df <- read.csv("scAnalysisPipelines.csv")
 
-# arrayExpressAbbrev <- c("AFFY", "AGIL", "ATMX", "CBIL", "ERAD", "GEOD", "GEUV", "HCAD", "JJRD", "MAXD",
-#                         "MEXP", "MIMR", "MTAB", "NASC", "TABM")
-# arrayExpressAbbrev <- c(paste0("E-", arrayExpressAbbrev), paste0("A-", arrayExpressAbbrev))
-# 
-
-
-# arrayExpressAbbrevE <- c("E-ATMX", 
-#                         "E-CURD",#
-#                         "E-CBIL",
-#                         "E-ENAD",#
-#                         "E-ERAD", 
-#                         "E-GEOD", 
-#                         "E-GEUV", "E-HCAD", "E-JJRD", "E-MAXD",
-#                         "E-MEXP", 
-#                         "E-MIMR", "E-MTAB", "E-NASC", "E-TABM")
-# arrayExpressAbbrevA <- c("A-AFFY", "A-AGIL", 
-#                         "A-GEOD", 
-#                         "A-MEXP")
-# arrayExpressAbbrev <- c(arrayExpressAbbrevE, arrayExpressAbbrevA)
-# # Find pairs of the elements in the vector arrayExpressAbbrev occurring at least once
-# arrayExpressAbbrev.coms <- data.frame(t(combn(arrayExpressAbbrev, 2)))
-# arrayExpressAbbrev.coms[, 3] <- paste0(arrayExpressAbbrev.coms[, 1], arrayExpressAbbrev.coms[, 2])
-# 
-# arrayExpressAbbrev.coms <-  arrayExpressAbbrev.coms[
-#   grepl("E-", arrayExpressAbbrev.coms[, 3]) & grepl("A-", arrayExpressAbbrev.coms[, 3]), ]
-# arrayExpressAbbrev.coms$V3 <- NULL
-# 
-# 
-# datasetMicroarrayOnly <- dataset %>% dplyr::filter(dataType == "microarray")
-# 
-# allIds <- datasetMicroarrayOnly$datasetID
-# 
-# existingArrayExpressAbbrev.coms.lst <- list()
-# for (i in seq(nrow(arrayExpressAbbrev.coms))) {
-#   res <- t(data.frame(lapply(datasetMicroarrayOnly$datasetID, function(x, strVec=strVec){
-#     checkIfAllStringsAreContained(strVec, str = x)
-#   }, strVec = arrayExpressAbbrev.coms[i,])))
-#   nCount <- sum(res[,1])
-# 
-#   allIds <- setdiff(allIds, datasetMicroarrayOnly$datasetID[res[,1]])
-#   existingArrayExpressAbbrev.coms.lst <- append(
-#     existingArrayExpressAbbrev.coms.lst, 
-#     list(c(comb = paste0(sort(arrayExpressAbbrev.coms[i,], decreasing = TRUE), collapse = ", "), nCount = nCount)))
-# }
-# 
-# microarray.df <- data.frame(t(sapply(existingArrayExpressAbbrev.coms.lst, c)))
-# microarray.df <- microarray.df[microarray.df$nCount != 0,]
-# 
-# 
-# eDataTypes <- c("RNAseq_fpkms_median", "RNAseq_raw","RNAseq_tpms_median", 
-#                 "sc_normalized", "sc_unnormalized"
-#                 )
-# 
-# #for (eDataType in eDataTypes){
-# eDataTypes.lst <- lapply(eDataTypes, function(eDataType) {
-#   eDataTypeOnly <- dataset %>% dplyr::filter(dataType == eDataType)
-#   countAbbrev <- sub("^([^\\-]+\\-[^\\-]+).*", "\\1", eDataTypeOnly$datasetID)
-#   table(countAbbrev)
-# })  
-# names(eDataTypes.lst) <- eDataTypes
-# eDataTypes.df <- do.call(rbind,lapply(eDataTypes.lst, data.frame))
-# eDataTypes.df$dataType <- sub("\\..*", "", row.names(eDataTypes.df))
-# 
-# eDataTypes.df <- reshape(eDataTypes.df, idvar = "countAbbrev", timevar = "dataType", direction = "wide")
-# row.names(eDataTypes.df) <- NULL
-
-
-# microbiome --> "16s", "wgs"
-# microarray --> separate by A, specifically AFFY subtype
-# bulk RNA-seq and scRNA-seq: separate by E (bulk--> GEOD, MTAB, other; sc --> GEOD, MTAB, other)
 dataset <- dataset %>% 
   mutate(
-         # dataType3 = case_when(grepl("LC", datasetID, ignore.case = TRUE) & 
-         #                         grepl("pos", datasetID, ignore.case = TRUE) & 
-         #                         dataType == "metabolomics_MS" ~ paste0(dataType, "_LC_pos"),
-         #                       grepl("LC", datasetID, ignore.case = TRUE) & 
-         #                         grepl("neg", datasetID, ignore.case = TRUE) & 
-         #                         dataType == "metabolomics_MS" ~ paste0(dataType, "_LC_neg"),
-         #                       grepl("GC", datasetID, ignore.case = TRUE) & 
-         #                         grepl("pos", datasetID, ignore.case = TRUE) & 
-         #                         dataType == "metabolomics_MS" ~ paste0(dataType, "_GC_pos"),
-         #                       grepl("GC", datasetID, ignore.case = TRUE) & 
-         #                         grepl("neg", datasetID, ignore.case = TRUE) & 
-         #                         dataType == "metabolomics_MS" ~ paste0(dataType, "_GC_neg"),
-         #                       TRUE ~ dataType4),
-         # dataType4 = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
-         #                       grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
-         #                       grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
-         #                       TRUE ~ dataType),
-         dataType = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
-                              grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
-                              grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
-                              datasetID == "MTBLS242_m_mtbls242_v2_maf.tsv" ~ "metabolomics_NMR", 
-                              dataType == "RNAseq_raw_undecorated" ~ "RNAseq_raw",
-                              TRUE ~ dataType),
-         dataTypeTmp = case_when(#grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
-                                    # grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
-                                    # grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
-                                    # dataType == "RNAseq_raw_undecorated" ~ "RNAseq_raw",
-           # metabolomics FIA, DI, GC, LC (HILIC, RP)
-           # "MALDI", "MSImaging", "DESI"  --> otherIonization
-           # if datType2 undefined check in technology for "DI-" --> "DI", "CE-" --> "CE", "FIA-" --> "FIA", "GC-" --> "GC", "LC-" --> "LC", "NMR" --> "NMR"
-           # "metabolomics_MS_Undefined" --> remove "NMR" from technology
-           # Separate GC to GC, SPME-GC and GCxGC ?
-           # check if categorization in MS and NMR is correct
-           # Add negative and positive?
-                                    grepl("GC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_GC"),
-                                    grepl("LC|HILIC|RP", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_LC"),
-                                    grepl("FIA", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_FIA"),
-                                    grepl("MALDI|MSImaging|DESI", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_otherIonization"),
-                                    grepl("_DI-", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_DI"),
-                                    dataType == "metabolomics_MS" ~ paste0(dataType, "_Undefined"),
-                                    dataType %in% c("sc_normalized", "sc_unnormalized") ~ paste0(dataType, "_", 
-                                                                         scPipeline.df$technology[match(gsub("\\..*", "", datasetID), 
-                                                                                                        scPipeline.df$projectId)]),
-                                    # grepl("RNAseq", dataType) | grepl("sc_", dataType) ~ paste0(dataType, "_", sub(".*-([A-Z]+)-.*", "\\1", datasetID)),
-                               grepl("RNAseq", dataType) ~ paste0(dataType, "_", sub(".*-([A-Z]+)-.*", "\\1", datasetID)),
-                               dataType == "microarray" ~ paste0(dataType, "_", sub(".*-([A-Z]+-\\d+).*", "\\1", datasetID)),
-                               dataType == "microbiome" ~ paste0(dataType, "_", ifelse(grepl("16s", datasetID, ignore.case = TRUE), "16S", "WGS")),
-                                    TRUE ~ dataType),# ,
-         dataType2 = case_when(
-           grepl("RNAseq", dataTypeTmp) & !(sub(".+_", "", dataTypeTmp) %in% c("GEOD", "MTAB"))
-                                                   ~ paste0(sub("_[^_]*$", "", dataTypeTmp), "_Other"),
-           TRUE ~ dataTypeTmp),# ,
-         dataTypeTmp2 = case_when(
-           grepl("sc_", dataType2) ~ paste0(dataType2, "_", sub(".*-([A-Z]+)-.*", "\\1", datasetID)),
-                               TRUE ~ dataType2),
-         dataType3 = case_when(
-           grepl("sc_", dataTypeTmp2)  & !(sub(".+_", "", dataTypeTmp2) %in% c("GEOD", "MTAB")) ~ 
-             paste0(sub("_[^_]*$", "", dataTypeTmp2), "_Other"),
-                               TRUE ~ dataTypeTmp2)#,
-         # dataTypeMetabolomicsCombined = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
-         #                                          grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
-         #                                          grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
-         #                                          grepl("metabolomics", dataType, ignore.case = TRUE) ~ "metabolomics",
-         #                                          TRUE ~ dataType)
-         ) %>% select(-c(dataTypeTmp, dataTypeTmp2))
+    dataType = case_when(grepl("\\^iBAQ", datasetID) ~ paste0(dataType, "_iBAQ"),
+                         grepl("\\^LFQ", datasetID) ~ paste0(dataType, "_LFQ"),
+                         grepl("\\^Intensity", datasetID) ~ paste0(dataType, "_Intensity"),
+                         datasetID == "MTBLS242_m_mtbls242_v2_maf.tsv" ~ "metabolomics_NMR", 
+                         dataType == "RNAseq_raw_undecorated" ~ "RNAseq_raw",
+                         TRUE ~ dataType),
+    # dataTypeTmp = case_when(
+    dataTypeSubgroups = case_when(
+      # For LC-MS: Add negative and positive?
+      grepl("GC", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_GC"),
+      grepl("LC|HILIC|RP", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_LC"),
+      grepl("FIA", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_FIA"),
+      grepl("MALDI|MSImaging|DESI", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_otherIonization"),
+      grepl("_DI-", datasetID, ignore.case = TRUE) & dataType == "metabolomics_MS" ~ paste0(dataType, "_DI"),
+      dataType == "metabolomics_MS" ~ paste0(dataType, "_Undefined"),
+      dataType %in% c("sc_normalized", "sc_unnormalized") ~ paste0(dataType, "_", 
+                                                                   scPipeline.df$technology[match(gsub("\\..*", "", datasetID), 
+                                                                                                  scPipeline.df$projectId)]),
+      # grepl("RNAseq", dataType) ~ paste0(dataType, "_", sub(".*-([A-Z]+)-.*", "\\1", datasetID)),
+      dataType == "microarray" ~ paste0(dataType, "_", sub(".*-([A-Z]+-\\d+).*", "\\1", datasetID)),
+      dataType == "microbiome" ~ paste0(dataType, "_", ifelse(grepl("16s", datasetID, ignore.case = TRUE), "16S", "WGS")),
+      TRUE ~ dataType) #,
+    # dataTypeSubgroups = case_when(
+    #   grepl("RNAseq", dataTypeTmp) & !(sub(".+_", "", dataTypeTmp) %in% c("GEOD", "MTAB"))
+    #   ~ paste0(sub("_[^_]*$", "", dataTypeTmp), "_Other"),
+    #   TRUE ~ dataTypeTmp)#,
+    # dataTypeTmp2 = case_when(
+    #   grepl("sc_", dataTypeSubgroups) ~ paste0(dataTypeSubgroups, "_", sub(".*-([A-Z]+)-.*", "\\1", datasetID)),
+    #   TRUE ~ dataTypeSubgroups),
+    # dataTypeSubgroups2 = case_when(
+    #   grepl("sc_", dataTypeTmp2)  & !(sub(".+_", "", dataTypeTmp2) %in% c("GEOD", "MTAB")) ~ 
+    #     paste0(sub("_[^_]*$", "", dataTypeTmp2), "_Other"),
+    #   TRUE ~ dataTypeTmp2)
+  ) 
+# %>% select(-c(dataTypeTmp#, 
+#                   # dataTypeTmp2
+#                   ))
 
 
 json.df <- read.csv("microarray_metadata.csv")
 
-manufacturer.df <- json.df %>% dplyr::select("chipID", "Manufacturer")  %>%  mutate(dataType2 = paste0("microarray_", sub("A-", "", chipID))) %>% select(-chipID)
+manufacturer.df <- json.df %>% dplyr::select("chipID", "Manufacturer")  %>%  mutate(dataTypeSubgroups = paste0("microarray_", sub("A-", "", chipID))) %>% select(-chipID)
 
-dataset <- dplyr::left_join(dataset, manufacturer.df, by = "dataType2") %>%
-  mutate(dataType2 = case_when(grepl("microarray_", dataType2) ~ paste0("microarray_", Manufacturer),
-                       TRUE ~ dataType2),
-         dataType3 = case_when(grepl("microarray_", dataType3) ~ paste0("microarray_", Manufacturer),
-                               TRUE ~ dataType3)
+dataset <- dplyr::left_join(dataset, manufacturer.df, by = "dataTypeSubgroups") %>%
+  mutate(dataTypeSubgroups = case_when(grepl("microarray_", dataTypeSubgroups) ~ paste0("microarray_", Manufacturer),
+                                       TRUE ~ dataTypeSubgroups)#,
+         # dataTypeSubgroups2 = case_when(grepl("microarray_", dataTypeSubgroups2) ~ paste0("microarray_", Manufacturer),
+         #                       TRUE ~ dataTypeSubgroups2)
   ) %>% select(-Manufacturer)
 
 
@@ -197,7 +98,7 @@ prideMeta.df.forIncludedPrideIDs <- rbind(prideMeta.df.forIncludedPrideIDs,
                                             organismParts = "Brain",
                                             experimentTypes = "Shotgun proteomics",
                                             instruments = "Q Exactive")
-                                          )
+)
 prideMeta.df.forIncludedPrideIDs$instruments <- gsub(";MaxQuant", "", prideMeta.df.forIncludedPrideIDs$instruments)
 write.csv(data.frame(instrument = sort(unique(unlist(strsplit(prideMeta.df.forIncludedPrideIDs$instruments, ";"))))), 
           "proteomicsPride_instruments.csv",
@@ -230,49 +131,34 @@ prideTranslation.df <- translateTermsInColumns(oldAndID.df = prideMeta.df.forInc
                                                  dplyr::rename("old" = "instrument", "new" = "manufacturer"), 
                                                oldCol = "instruments", idCol = "prideID", 
                                                multipleHandling = "Multiple")
-  
-  
 
-# replaced <- strsplit(prideMeta.df.forIncludedPrideIDs$instruments, ";")
-# for (row in seq(nrow(prideMetaInstrumentsManufacturerAdded.df))) {
-# 
-#   replaced <- rapply(replaced, function(x){
-#     gsub(paste0("^", prideMetaInstrumentsManufacturerAdded.df[row, ]$instrument, "$"),
-#          prideMetaInstrumentsManufacturerAdded.df[row, ]$manufacturer, x)
-#   }, how = "list")
-# }
-# 
-# replaced2 <- rapply(replaced, function(x){ifelse(length(unique(x))>1, "Multiple", unique(x))
-# }, how = "list")
-# 
-# replaced2.df <- data.frame(prideID = prideMeta.df.forIncludedPrideIDs$prideID, manufacturer = unlist(replaced2))
-# 
-# prideMeta.df.forIncludedPrideIDs <- dplyr::left_join(prideMeta.df.forIncludedPrideIDs, replaced2.df)
+
+
 
 colnames(prideTranslation.df) <- c("prideID", "instrument", "manufacturer")
 
 prideMeta.df.forIncludedPrideIDs <- dplyr::left_join(prideMeta.df.forIncludedPrideIDs, prideTranslation.df, by = join_by(prideID))
 
 dataset <- dataset %>% 
-  mutate(dataType2 = case_when(grepl("_pride_", dataType) ~ 
-                                    paste0(dataType2, "_", 
-                                           prideMeta.df.forIncludedPrideIDs$manufacturer[
-    match(sub("^(.*?)_.*$", "\\1", datasetID), 
-          prideMeta.df.forIncludedPrideIDs$prideID)]),
-            TRUE ~ dataType2),
-    dataType3 = case_when(grepl("_pride_", dataType) ~ 
-                            paste0(dataType3, "_", 
-                                   prideMeta.df.forIncludedPrideIDs$manufacturer[
-                                     match(sub("^(.*?)_.*$", "\\1", datasetID), 
-                                           prideMeta.df.forIncludedPrideIDs$prideID)]),
-                          TRUE ~ dataType3)
-    )
+  mutate(dataTypeSubgroups = case_when(grepl("_pride_", dataType) ~ 
+                                         paste0(dataTypeSubgroups, "_", 
+                                                prideMeta.df.forIncludedPrideIDs$manufacturer[
+                                                  match(sub("^(.*?)_.*$", "\\1", datasetID), 
+                                                        prideMeta.df.forIncludedPrideIDs$prideID)]),
+                                       TRUE ~ dataTypeSubgroups)#,
+         # dataTypeSubgroups2 = case_when(grepl("_pride_", dataType) ~ 
+         #                         paste0(dataTypeSubgroups2, "_", 
+         #                                prideMeta.df.forIncludedPrideIDs$manufacturer[
+         #                                  match(sub("^(.*?)_.*$", "\\1", datasetID), 
+         #                                        prideMeta.df.forIncludedPrideIDs$prideID)]),
+         #                       TRUE ~ dataTypeSubgroups2)
+  )
 
 
 metabolomicsMeta.df <- read.csv("metabolomics_metadata.csv")
 metabolomicsDatasets <- dataset %>% 
   filter(dataType %in% c("metabolomics_MS", "metabolomics_NMR")) %>%
-  dplyr::select(datasetID, dataType, dataType2) %>%
+  dplyr::select(datasetID, dataType, dataTypeSubgroups) %>%
   mutate(accession = sub("^(.*?)_.*$", "\\1", datasetID)) %>%
   left_join(metabolomicsMeta.df, by = join_by(accession == accession))
 
@@ -302,22 +188,23 @@ metabolomicsTranslation.df <- cbind(metabolomicsDatasets %>% select(- dataType, 
 
 metabolomicsTranslation.df[grepl(";", metabolomicsTranslation.df$technology2) | metabolomicsTranslation.df$technology2 =="", ]$technology2 <- NA
 metabolomicsTranslation.df <- metabolomicsTranslation.df %>% mutate(
-  dataType2New = case_when(dataType2 == "metabolomics_MS_Undefined" & !is.na(technology2) ~ paste0("metabolomics_MS_", technology2), 
-                          TRUE ~ dataType2)
+  dataTypeSubgroupsNew = case_when(dataTypeSubgroups == "metabolomics_MS_Undefined" & !is.na(technology2) ~ paste0("metabolomics_MS_", technology2), 
+                                   TRUE ~ dataTypeSubgroups)
 )
 
 # MTBLS440 --> LC
 # MTBLS728 --> LC
-metabolomicsTranslation.df[metabolomicsTranslation.df$accession %in% c("MTBLS440", "MTBLS728"),]$dataType2New <- "metabolomics_MS_LC"
+metabolomicsTranslation.df[metabolomicsTranslation.df$accession %in% c("MTBLS440", "MTBLS728"),]$dataTypeSubgroupsNew <- "metabolomics_MS_LC"
 dataset <- dataset %>%
-  mutate(dataType2 = case_when(grepl("metabolomics_", dataType) ~ metabolomicsTranslation.df$dataType2New[
-                                          match(datasetID, 
-                                                metabolomicsTranslation.df$datasetID)],
-                               TRUE ~ dataType2),
-         dataType3 = case_when(grepl("metabolomics_", dataType) ~ metabolomicsTranslation.df$dataType2New[
-           match(datasetID, 
-                 metabolomicsTranslation.df$datasetID)],
-           TRUE ~ dataType3))
+  mutate(dataTypeSubgroups = case_when(grepl("metabolomics_", dataType) ~ metabolomicsTranslation.df$dataTypeSubgroupsNew[
+    match(datasetID, 
+          metabolomicsTranslation.df$datasetID)],
+    TRUE ~ dataTypeSubgroups)#,
+    # dataTypeSubgroups2 = case_when(grepl("metabolomics_", dataType) ~ metabolomicsTranslation.df$dataTypeSubgroupsNew[
+    #   match(datasetID, 
+    #         metabolomicsTranslation.df$datasetID)],
+    #   TRUE ~ dataTypeSubgroups2)
+  )
 
 # Remove outliers: 
 # E-GEOD-152766.aggregated_filtered_counts.mtx, (also E-GEOD-152766.aggregated_filtered_normalised_counts.mtx to make
@@ -326,31 +213,16 @@ dataset <- dataset %>%
 # MTBLS407_m_MTBLS407_21548_metabolite_profiling_mass_spectrometry_v2_maf.tsv
 data <- dataset %>% dplyr::filter(!(datasetID %in% c("E-GEOD-152766.aggregated_filtered_counts.mtx", 
                                                      "E-GEOD-152766.aggregated_filtered_normalised_counts.mtx",
-                                                   "MTBLS407_m_MTBLS407_21022_metabolite_profiling_mass_spectrometry_v2_maf.tsv",
-                                                   "MTBLS407_m_MTBLS407_21548_metabolite_profiling_mass_spectrometry_v2_maf.tsv")))
+                                                     "MTBLS407_m_MTBLS407_21022_metabolite_profiling_mass_spectrometry_v2_maf.tsv",
+                                                     "MTBLS407_m_MTBLS407_21548_metabolite_profiling_mass_spectrometry_v2_maf.tsv")))
 
 
 # Check for duplicates
 data.duplicateRowsOnly <- data[which(duplicated(data %>% select(-datasetID)) | duplicated(data %>% select(-datasetID), fromLast = TRUE)), ]
 
 
-# selectedDataTypeCol <- "dataType"
-# data <- dataset %>% dplyr::group_by(!!sym(selectedDataTypeCol)) %>% filter(n() > 5) %>% ungroup
-data <- data %>% dplyr::group_by(dataType) %>% filter(n() > 5) %>% ungroup
-
-
 write.csv(data, "datasets_results.csv", row.names = FALSE)
 write.csv(data.frame(table(data[, "dataType"])), "numberOfDatasets.csv", row.names = FALSE)
-
-################################################################################
-# datasetMetabolomicsMSIDs <- dataset %>% filter(dataType == "metabolomics_MS") %>% select(datasetID) %>% unlist() %>% as.vector()
-# metabolightsMSProjectIDs <- sub("\\_.*", "", datasetMetabolomicsMSIDs)
-# tableMetabolightsMSProjectIDs <- data.frame(table(metabolightsMSProjectIDs))
-# 
-# datasetMetabolomicsNMRIDs <- dataset %>% filter(dataType == "metabolomics_NMR") %>% select(datasetID) %>% unlist() %>% as.vector()
-# metabolightsNMRProjectIDs <- sub("\\_.*", "", datasetMetabolomicsNMRIDs)
-# tableMetabolightsNMRProjectIDs <- data.frame(table(metabolightsNMRProjectIDs))
-
 
 ################################################################################
 ################################################################################
@@ -373,10 +245,10 @@ data <- data %>%
 
 
 seedCols <- c("bimodalityRowCorrSeed", "bimodalityColCorrSeed", 
-                                                          "coefHclustRowsSeed", "intensityNAProbSeed"#,
-                                                          #"minRowNaPercentage", "maxRowNaPercentage", 
-                                                          #"minColNaPercentage", "maxColNaPercentage", 
-                                                          #"percOfRowsWithNAs", "percOfColsWithNAs"
+              "coefHclustRowsSeed", "intensityNAProbSeed"#,
+              #"minRowNaPercentage", "maxRowNaPercentage", 
+              #"minColNaPercentage", "maxColNaPercentage", 
+              #"percOfRowsWithNAs", "percOfColsWithNAs"
 )
 
 data <- data[,!(colnames(data) %in% seedCols)]
@@ -391,148 +263,106 @@ data <- data[,!(colnames(data) %in% c("minRowNonNaNumber", "maxRowNonNaNumber"))
 write.csv(data, "datasets_results_clean.csv", row.names = FALSE)
 
 ################################################################################
-# chipIDs <- paste0("A-", sub("microarray_", "", data %>% filter(dataType == "microarray") %>% select(dataType2) %>% unique() %>% as.vector() %>% unlist() %>% unname()))
-# modulos <- formatC(as.numeric(sub(".+-(.*)", "\\1", chipIDs)) %% 1000, width=3, flag="0")
-# fourLetterCodes <- sub("^(.*)-.*$", "\\1", chipIDs)
-# # jsons <- system(paste0('lftp ', "http://ftp.ebi.ac.uk/biostudies/nfs/A-AFFY-/",' <<<\'find| grep "\\\\.json$"; exit;\';'),intern=T);
-# 
-# ftpPath <- "http://ftp.ebi.ac.uk/biostudies/nfs/"
-# jsonPaths <- paste0(ftpPath, fourLetterCodes, "-/", modulos, "/", chipIDs, "/", chipIDs, ".json")
-# 
-# library("jsonlite")
-# 
-# jsonLst <- list()
-# for (jsonPath in jsonPaths) {
-#   print(jsonPath)
-#   jsonContent <- jsonlite::fromJSON(jsonPath)
-#   jsonAttributes <- jsonContent[["section"]][["attributes"]]
-#   jsonAttributesVec <- with(jsonAttributes, setNames(value, name))
-#   
-#   
-#   Organism <- ifelse("Organism" %in% names(jsonAttributesVec), 
-#                      jsonAttributesVec[["Organism"]],
-#                      NA)
-#   chipID <- gsub(".*/(.*).json", "\\1", jsonPath)
-#   
-#   jsonLst <- append(jsonLst, list(c(chipID = chipID,
-#                                     Title = jsonAttributesVec[["Title"]], 
-#                                     Description = jsonAttributesVec[["Description"]],
-#                                     Organism = Organism
-#   )))
-# }
-# 
-# json.df <- do.call(rbind.data.frame, jsonLst)
-# colnames(json.df) <- c("chipID", "Title", "Description", "Organism")
-# 
-# json.df <- json.df %>% mutate(
-#   Manufacturer = case_when(
-#     grepl("Affymetrix", Title) ~ "Affymetrix",
-#     grepl("Agilent", Title) ~ "Agilent",
-#     grepl("Illumina", Title) ~ "Illumina"),
-#   Organism2 = case_when(
-#     grepl("hugenefl", tolower(Title)) | grepl("HT_HG-U133_Plus_PM", Title) | grepl("human", tolower(Title)) ~ "Human",
-#     grepl("chicken", tolower(Title)) ~ "Chicken",
-#     grepl("rice", tolower(Title)) ~ "Rice",
-#     grepl("bovine", tolower(Title)) ~ "Bovine",
-#     grepl("mouse", tolower(Title)) ~ "Mouse",
-#     grepl("poplar", tolower(Title)) ~ "Poplar",
-#     grepl("rhesus macaque", tolower(Title)) ~ "Rhesus Macaque",
-#     grepl("canine", tolower(Title)) ~ "Canine",
-#     grepl("rat", tolower(Title)) ~ "Rat",
-#     grepl("drosophila", tolower(Title)) ~ "Drosophila",
-#     grepl("arabidopsis", tolower(Title)) ~ "Arabidopsis",
-#     grepl("murine", tolower(Title)) ~ "Murine",
-#     grepl("barley", tolower(Title)) ~ "Barley",
-#     grepl("zebrafish", tolower(Title)) ~ "Zebrafish",
-#     grepl("yeast", tolower(Title)) ~ "Yeast",
-#     grepl("c. elegans", tolower(Title)) ~ "Caenorhabditis elegans",
-#     grepl("porcine", tolower(Title)) ~ "Porcine",
-#     grepl("maize", tolower(Title)) ~ "Maize",
-#     grepl("grape", tolower(Title)) ~ "Grape"
-#   )
-# )
-# 
-# write.csv(json.df, "microarray_metadata.csv", row.names = FALSE)
-# 
-# microarrayFreq.df <- table(data %>% filter(dataType == "microarray") %>% 
-#                              select(dataType2)) %>% data.frame() %>%
-#   mutate(chipID = paste0("A-", sub("microarray_", "", dataType2)))
-# microarrayFreq.df <- dplyr::left_join(json.df, microarrayFreq.df)
-# 
-# organismFreq.df <- data.frame(sort(tapply(microarrayFreq.df$Freq, microarrayFreq.df$Organism2, FUN=sum), decreasing = TRUE))
-# colnames(organismFreq.df) <- "Freq"
-# 
-# microarrayFreq.df.sel <- microarrayFreq.df[, c("dataType2", "chipID", "Manufacturer", "Organism2")]
-# microarrayFreq.df.sel[microarrayFreq.df.sel$Organism2 %in% c("Mouse", "Rat"), ]$Organism2 <- "Murine"
-# colnames(microarrayFreq.df.sel) <- c("dataType2", "chipID", "Manufacturer", "Organism")
-# # attach information to ChipID, Manufacturer, Organism
-# data <- dplyr::left_join(data, microarrayFreq.df.sel, by = "dataType2")
-# data$chipFourLetterCode <- sub(".*-(.*)-.*", "\\1", data$chipID)
-# 
-# microarrayCols <- c("chipID", "Manufacturer", "Organism", "chipFourLetterCode")
-# 
-# write.csv(data, "datasets_results_clean_microararyManufacturerAdded.csv", row.names = FALSE)
 
-################################################################################
 
 # Rename Data types
-OldDataTypeNames <- c("metabolomics_MS", "metabolomics_NMR", "microarray", "microbiome", 
-                      "proteomics_expressionatlas_iBAQ", "proteomics_expressionatlas_Intensity", 
-                      "proteomics_pride_LFQ", "proteomics_pride_Intensity", "proteomics_pride_iBAQ", 
-                      "RNAseq_fpkms_median", "RNAseq_raw", "RNAseq_tpms_median", "sc_normalized", 
-                      "sc_unnormalized", "scProteomics")
-
-
-# OldDataTypeNames <- c("metabolomics_MS", "metabolomics_MS_GC", "metabolomics_MS_LC", 
-#   "metabolomics_NMR", "microarray_Affymetrix", "microarray_Illumina", 
-#   "microarray_Agilent", "microbiome_16S", "microbiome_WGS", "proteomics_expressionatlas_iBAQ", 
-#   "proteomics_expressionatlas_Intensity", "proteomics_expressionatlas_LFQ", 
-#   "proteomics_pride_LFQ_Thermo", "proteomics_pride_Intensity_Thermo", 
-#   "proteomics_pride_iBAQ_Thermo", "proteomics_pride_LFQ_Multiple", 
-#   "proteomics_pride_iBAQ_Multiple", "proteomics_pride_Intensity_Multiple", 
-#   "proteomics_pride_Intensity_Bruker", "proteomics_pride_LFQ_Agilent", 
-#   "proteomics_pride_Intensity_Agilent", "proteomics_pride_LFQ_Bruker", 
-#   "proteomics_pride_LFQ_SCIEX", "proteomics_pride_Intensity_SCIEX", 
-#   "proteomics_pride_iBAQ_SCIEX", "proteomics_pride_iBAQ_Bruker", 
-#   "proteomics_pride_iBAQ_Agilent", "RNAseq_fpkms_median_Other", 
-#   "RNAseq_fpkms_median_GEOD", "RNAseq_fpkms_median_MTAB", "RNAseq_raw_Other", 
-#   "RNAseq_raw_GEOD", "RNAseq_raw_MTAB", "RNAseq_tpms_median_Other", 
-#   "RNAseq_tpms_median_GEOD", "RNAseq_tpms_median_MTAB", "sc_normalized_SMART-like", 
-#   "sc_normalized_Droplet-based", "sc_unnormalized_SMART-like", 
-#   "sc_unnormalized_Droplet-based", "scProteomics")
-
-NewDataTypeNames <- c("Metabolomics (MS)", "Metabolomics (NMR)", "Microarray", "Microbiome", 
-              "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)", 
-              "Proteomics (LFQ, PRIDE)", "Proteomics (Intensity, PRIDE)", "Proteomics (iBAQ, PRIDE)", 
-              "RNA-seq (FPKM)", "RNA-seq (raw)", "RNA-seq (TPM)", "scRNA-seq (normalized)", 
-              "scRNA-seq (unnormalized)", "scProteomics")
-
-# NewDataTypeNames <- c("Metabolomics (Undefined-MS)", "Metabolomics (GC-MS)", "Metabolomics (LC-MS)", 
-#                       "Metabolomics (NMR)", "Microarray (Affymetrix)", "Microarray (Illumina)", 
-#                       "Microarray (Agilent)", "Microbiome (16S)", "Microbiome (WGS)", "Proteomics (iBAQ, Expression Atlas)", 
-#                       "Proteomics (Intensity, Expression Atlas)", "Proteomics (LFQ, Expression Atlas)", 
-#                       "Proteomics (LFQ, PRIDE, Thermo)", "Proteomics (Intensity, PRIDE, Thermo)", 
-#                       "Proteomics (iBAQ, PRIDE, Thermo)", "Proteomics (LFQ, PRIDE, Multiple)", 
-#                       "Proteomics (iBAQ, PRIDE, Multiple)", "Proteomics (Intensity, PRIDE, Multiple)", 
-#                       "Proteomics (Intensity, PRIDE, Bruker)", "Proteomics (LFQ, PRIDE, Agilent)", 
-#                       "Proteomics (Intensity, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Bruker)", 
-#                       "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (Intensity, PRIDE, SCIEX)", 
-#                       "Proteomics (iBAQ, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, Bruker)", 
-#                       "Proteomics (iBAQ, PRIDE, Agilent)", "RNA-seq (FPKM, Other)", 
-#                       "RNA-seq (FPKM, GEOD)", "RNA-seq (FPKM, MTAB)", "RNA-seq (raw, Other)", 
-#                       "RNA-seq (raw, GEOD)", "RNA-seq (raw, MTAB)", "RNA-seq (TPM, Other)", 
-#                       "RNA-seq (TPM, GEOD)", "RNA-seq (TPM, MTAB)", "scRNA-seq (SMART-like, normalized)", 
-#                       "scRNA-seq (Droplet-based, normalized)", "scRNA-seq (SMART-like, unnormalized)", 
-#                       "scRNA-seq (Droplet-based, unnormalized)", "scProteomics")
-
-renameDataTypeTable <- data.frame(OldDataTypeNames = OldDataTypeNames,
-                                  NewDataTypeNames = NewDataTypeNames)
-
-data$dataType <- renameDataTypeTable$NewDataTypeNames[
-  match(data$dataType, renameDataTypeTable$OldDataTypeNames)]
+for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
+  if (dataTypeLevel == "dataType") {
+    OldDataTypeNames <- c("metabolomics_MS", "metabolomics_NMR", "microarray", "microbiome", 
+                          "proteomics_expressionatlas_iBAQ", "proteomics_expressionatlas_Intensity", 
+                          "proteomics_pride_LFQ", "proteomics_pride_Intensity", "proteomics_pride_iBAQ", 
+                          "RNAseq_fpkms_median", "RNAseq_raw", "RNAseq_tpms_median", "sc_normalized", 
+                          "sc_unnormalized", "scProteomics")
+    NewDataTypeNames <- c("Metabolomics (MS)", "Metabolomics (NMR)", "Microarray", "Microbiome", 
+                          "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)", 
+                          "Proteomics (LFQ, PRIDE)", "Proteomics (Intensity, PRIDE)", "Proteomics (iBAQ, PRIDE)", 
+                          "RNA-seq (FPKM)", "RNA-seq (raw)", "RNA-seq (TPM)", "scRNA-seq (normalized)", 
+                          "scRNA-seq (unnormalized)", "scProteomics")
+    levels <- c( "Metabolomics (NMR)", "Metabolomics (MS)", 
+                 "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)",
+                 "Proteomics (iBAQ, PRIDE)", "Proteomics (Intensity, PRIDE)", "Proteomics (LFQ, PRIDE)", 
+                 "scProteomics",
+                 "Microarray", 
+                 "RNA-seq (raw)", "RNA-seq (FPKM)", "RNA-seq (TPM)", 
+                 "scRNA-seq (unnormalized)",
+                 "scRNA-seq (normalized)", 
+                 "Microbiome")
+  } else if (dataTypeLevel == "dataTypeSubgroups") {
+    OldDataTypeNames <- c("metabolomics_MS_LC", "metabolomics_MS_GC", "metabolomics_MS_Undefined", 
+                          "metabolomics_MS_DI", "metabolomics_MS_FIA", "metabolomics_NMR", 
+                          "metabolomics_MS_CE", "metabolomics_MS_otherIonization", "microarray_Affymetrix", 
+                          "microarray_Illumina", "microarray_Agilent", "microbiome_16S", 
+                          "microbiome_WGS", "proteomics_expressionatlas_iBAQ", "proteomics_expressionatlas_Intensity", 
+                          "proteomics_expressionatlas_LFQ", "proteomics_pride_LFQ_Thermo", 
+                          "proteomics_pride_Intensity_Thermo", "proteomics_pride_iBAQ_Thermo", 
+                          "proteomics_pride_LFQ_Multiple", "proteomics_pride_iBAQ_Multiple", 
+                          "proteomics_pride_Intensity_Multiple", "proteomics_pride_Intensity_Bruker", 
+                          "proteomics_pride_LFQ_Agilent", "proteomics_pride_Intensity_Agilent", 
+                          "proteomics_pride_LFQ_Bruker", "proteomics_pride_LFQ_SCIEX", 
+                          "proteomics_pride_Intensity_SCIEX", "proteomics_pride_iBAQ_SCIEX", 
+                          "proteomics_pride_iBAQ_Bruker", "proteomics_pride_iBAQ_Agilent", 
+                          "RNAseq_fpkms_median", 
+                          "RNAseq_raw", 
+                          "RNAseq_tpms_median", 
+                          "sc_normalized_SMART-like",
+                          "sc_normalized_Droplet-based", "sc_unnormalized_SMART-like", 
+                          "sc_unnormalized_Droplet-based", "scProteomics")
+    NewDataTypeNames <- c("Metabolomics (LC-MS)", "Metabolomics (GC-MS)", "Metabolomics (Undefined-MS)", 
+                          "Metabolomics (DI-MS)", "Metabolomics (FIA-MS)", "Metabolomics (NMR)", 
+                          "Metabolomics (CE-MS)", "Metabolomics (Other ionization-MS)", "Microarray (Affymetrix)", 
+                          "Microarray (Illumina)", "Microarray (Agilent)", "Microbiome (16S)", 
+                          "Microbiome (WGS)", "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)", 
+                          "Proteomics (LFQ, Expression Atlas)", "Proteomics (LFQ, PRIDE, Thermo)", 
+                          "Proteomics (Intensity, PRIDE, Thermo)", "Proteomics (iBAQ, PRIDE, Thermo)", 
+                          "Proteomics (LFQ, PRIDE, Undefined)", "Proteomics (iBAQ, PRIDE, Undefined)", 
+                          "Proteomics (Intensity, PRIDE, Undefined)", "Proteomics (Intensity, PRIDE, Bruker)", 
+                          "Proteomics (LFQ, PRIDE, Agilent)", "Proteomics (Intensity, PRIDE, Agilent)", 
+                          "Proteomics (LFQ, PRIDE, Bruker)", "Proteomics (LFQ, PRIDE, SCIEX)", 
+                          "Proteomics (Intensity, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, SCIEX)", 
+                          "Proteomics (iBAQ, PRIDE, Bruker)", "Proteomics (iBAQ, PRIDE, Agilent)", 
+                          "RNA-seq (FPKM)", 
+                          "RNA-seq (raw)", 
+                          "RNA-seq (TPM)", 
+                          "scRNA-seq (SMART-like, normalized)",
+                          "scRNA-seq (Droplet-based, normalized)", "scRNA-seq (SMART-like, unnormalized)",
+                          "scRNA-seq (Droplet-based, unnormalized)", "scProteomics")
+    
+    levels <- c("Metabolomics (NMR)", 
+                "Metabolomics (GC-MS)", "Metabolomics (LC-MS)", "Metabolomics (DI-MS)", "Metabolomics (FIA-MS)", 
+                "Metabolomics (CE-MS)", "Metabolomics (Other ionization-MS)", "Metabolomics (Undefined-MS)", 
+                "Microarray (Affymetrix)", "Microarray (Illumina)", "Microarray (Agilent)", 
+                "Microbiome (16S)", "Microbiome (WGS)", 
+                "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)", "Proteomics (LFQ, Expression Atlas)", 
+                
+                "Proteomics (iBAQ, PRIDE, Agilent)", "Proteomics (iBAQ, PRIDE, Thermo)", "Proteomics (iBAQ, PRIDE, Bruker)", 
+                "Proteomics (iBAQ, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, Undefined)", 
+                
+                "Proteomics (Intensity, PRIDE, Agilent)", "Proteomics (Intensity, PRIDE, Thermo)", "Proteomics (Intensity, PRIDE, Bruker)", 
+                "Proteomics (Intensity, PRIDE, SCIEX)", "Proteomics (Intensity, PRIDE, Undefined)", 
+                
+                "Proteomics (LFQ, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Thermo)", "Proteomics (LFQ, PRIDE, Bruker)", 
+                "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (LFQ, PRIDE, Undefined)",
+                
+                "RNA-seq (raw)", 
+                "RNA-seq (FPKM)", 
+                "RNA-seq (TPM)", 
+                
+                "scRNA-seq (SMART-like, unnormalized)", "scRNA-seq (Droplet-based, unnormalized)", 
+                "scRNA-seq (SMART-like, normalized)", "scRNA-seq (Droplet-based, normalized)", 
+                "scProteomics")
+  }
+  
+  renameDataTypeTable <- data.frame(OldDataTypeNames = OldDataTypeNames,
+                                    NewDataTypeNames = NewDataTypeNames)
+  
+  data[, dataTypeLevel] <- renameDataTypeTable$NewDataTypeNames[
+    match(data[, dataTypeLevel], renameDataTypeTable$OldDataTypeNames)]
+  
+  data[, dataTypeLevel] <- factor(data[, dataTypeLevel], levels = levels)
+}  
 
 # Rename Variables
-Oldnames <- c("datasetID", "dataType", "nSamples", "nAnalytes", "minRowNaPercentage", 
+Oldnames <- c("datasetID", "dataType", "dataTypeSubgroups", "nSamples", "nAnalytes", "minRowNaPercentage", 
               "maxRowNaPercentage", "minColNaPercentage", "maxColNaPercentage", 
               "percNATotal", "percOfRowsWithNAs", "percOfColsWithNAs", "corSampleMeanNA", 
               "corSampleMeanNAPval", "corAnalyteMeanNA", "corAnalyteMeanNAPval", 
@@ -542,7 +372,7 @@ Oldnames <- c("datasetID", "dataType", "nSamples", "nAnalytes", "minRowNaPercent
               "intensityNAProb50.sd", "intensityNAProb90.sd", "intensityNAProbnSamplesWithProbValue", 
               "prctnDistinctValues")
 
-Newnames <- c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
+Newnames <- c("Dataset ID", "Data type", "Data type subgroups", "# Samples", "# Analytes", "min(% NA in analytes)", 
               "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
               "% NA", "% Analytes with NAs", "% Samples with NAs", 
               "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Samples) (p-Value)", 
@@ -563,44 +393,31 @@ renameTable <- data.frame(Oldnames = Oldnames,
 data <- data %>% dplyr::rename_with(~ Newnames[which(Oldnames == .x)], .cols = Oldnames)
 
 
-data$`Data type` <- factor(data$`Data type`, levels = c( "Metabolomics (NMR)", "Metabolomics (MS)", 
-                                                   "Proteomics (iBAQ, PRIDE)", "Proteomics (Intensity, PRIDE)", "Proteomics (LFQ, PRIDE)", 
-                                                   "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)",
-                                                  "scProteomics",
-                                                  "Microarray", 
-                                                  "RNA-seq (raw)", "RNA-seq (FPKM)", "RNA-seq (TPM)", 
-                                                  "scRNA-seq (unnormalized)",
-                                                  "scRNA-seq (normalized)", 
-                                                  "Microbiome"))
+data <- data %>% dplyr::mutate(`|Skewness|` = abs(Skewness))
+
+write.csv(data, "datasets_results_clean_renamed.csv", row.names = FALSE)
 
 
-data$`Data type` <- factor(data$`Data type`, levels = c("Metabolomics (NMR)", "Metabolomics (Undefined-MS)", "Metabolomics (GC-MS)", "Metabolomics (LC-MS)",
-                                                        "Microarray (Affymetrix)", "Microarray (Illumina)",
-                                                        "Microarray (Agilent)", "Microbiome (16S)", "Microbiome (WGS)", "Proteomics (iBAQ, Expression Atlas)",
-                                                        "Proteomics (Intensity, Expression Atlas)", "Proteomics (LFQ, Expression Atlas)",
-                                                        "Proteomics (LFQ, PRIDE, Thermo)", "Proteomics (Intensity, PRIDE, Thermo)",
-                                                        "Proteomics (iBAQ, PRIDE, Thermo)", "Proteomics (LFQ, PRIDE, Multiple)",
-                                                        "Proteomics (iBAQ, PRIDE, Multiple)", "Proteomics (Intensity, PRIDE, Multiple)",
-                                                        "Proteomics (Intensity, PRIDE, Bruker)", "Proteomics (LFQ, PRIDE, Agilent)",
-                                                        "Proteomics (Intensity, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Bruker)",
-                                                        "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (Intensity, PRIDE, SCIEX)",
-                                                        "Proteomics (iBAQ, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, Bruker)",
-                                                        "Proteomics (iBAQ, PRIDE, Agilent)", "RNA-seq (FPKM, Other)",
-                                                        "RNA-seq (FPKM, GEOD)", "RNA-seq (FPKM, MTAB)", "RNA-seq (raw, Other)",
-                                                        "RNA-seq (raw, GEOD)", "RNA-seq (raw, MTAB)", "RNA-seq (TPM, Other)",
-                                                        "RNA-seq (TPM, GEOD)", "RNA-seq (TPM, MTAB)", "scRNA-seq (SMART-like, normalized)",
-                                                        "scRNA-seq (Droplet-based, normalized)", "scRNA-seq (SMART-like, unnormalized)",
-                                                        "scRNA-seq (Droplet-based, unnormalized)", "scProteomics"))
+################################################################################
 
-#############################################
+
+
+allDataTypeLevels <- c("Data type", "Data type subgroups")
+selectedDataTypeLevel <- "Data type subgroups"
+
+
+data <- data %>% select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
+data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5) %>% ungroup
+
+################################################################################
 boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
-                                  "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
-                                  "% NA", "% Analytes with NAs", "% Samples with NAs", "Mean", 
-                                  "Median", "Min", "Max", "median(Variance of samples)", "median(Variance of analytes)", 
-                                  "Variance", "Kurtosis", "Skewness", "% Var. explained by PC1", 
-                                  "% Var. explained by PC2", "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
-                                  "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", "Agglom. coef. hierarch. analyte clustering", 
-                                  "% Distinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
+                                "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
+                                "% NA", "% Analytes with NAs", "% Samples with NAs", "Mean", 
+                                "Median", "Min", "Max", "median(Variance of samples)", "median(Variance of analytes)", 
+                                "Variance", "Kurtosis", "Skewness", "|Skewness|", "% Var. explained by PC1", 
+                                "% Var. explained by PC2", "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+                                "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", "Agglom. coef. hierarch. analyte clustering", 
+                                "% Distinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
                                 "sd(Intensity w/ prob(NA) = 50% for sample)", 
                                 "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
 
@@ -621,12 +438,14 @@ toBeLog2Transformed <- c("# Samples", "# Analytes",
                          "min(% NA in analytes)", "max(% NA in analytes)", 
                          "% Analytes with NAs", "% Samples with NAs",
                          "median(Variance of samples)", "median(Variance of analytes)", 
-                         "Variance", "Kurtosis", "Skewness",
+                         "Variance", "Kurtosis", "|Skewness|", "Skewness",
                          "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
                          "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)",
                          "sd(Intensity w/ prob(NA) = 50% for sample)", 
                          "sd(Intensity w/ prob(NA) = 90% for sample)")
 
+
+# matrixStats::colMins(data2 %>% select(-"Data type") %>% as.matrix, na.rm = TRUE)
 
 colsWithNegativeNumbers <- colnames(data2[, sapply(data2, FUN = function(x) any(x <= 0, na.rm = TRUE))])
 # [1] "min(% NA in analytes)"                            "max(% NA in analytes)"                           
@@ -644,15 +463,20 @@ colsWithNegativeNumbers <- colnames(data2[, sapply(data2, FUN = function(x) any(
 toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)
 # "# Samples"  "# Analytes" "Variance"  
 
-log2transform <- function(df, variable){
-  df[[paste0("log2(", variable, ")")]] <- log2(df[[variable]])
+logTransform <- function(df, variable, logBase = c("log2", "log1p")){
+  df[[paste0(logBase, "(", variable, ")")]] <- get(logBase)(df[[variable]])
   df[[variable]] <- NULL
   df
 }
 
 for (var in toBeLog2Transformed){
   # print(var)
-  data2 <- log2transform(df = data2, variable = var)
+  data2 <- logTransform(df = data2, variable = var, logBase = "log2")
+}
+
+for (var in c("median(Variance of samples)", "median(Variance of analytes)")){
+  # print(var)
+  data2 <- logTransform(df = data2, variable = var, logBase = "log1p")
 }
 
 write.csv(data2, "data2.csv", row.names = FALSE)
@@ -737,8 +561,8 @@ data2.long <- reshape2::melt(data2)
 neworder <- c("Data type", 
               "log2(# Analytes)", "log2(# Samples)", 
               "Mean", "Median", "Min", "Max", 
-              "median(Variance of samples)", "median(Variance of analytes)", "log2(Variance)",
-              "Kurtosis", "Skewness", "% Distinct values",
+              "log1p(median(Variance of samples))", "log1p(median(Variance of analytes))", "log2(Variance)",
+              "Kurtosis", "Skewness", "log2(|Skewness|)", "% Distinct values",
               "% NA",
               "min(% NA in samples)", "max(% NA in samples)",  
               "min(% NA in analytes)", "max(% NA in analytes)", 
@@ -763,7 +587,7 @@ numberOfDatasetsIncluded <- data2.long %>%
 colnames(numberOfDatasetsIncluded) <- c("Data type", "variable", "count")
 write.csv(numberOfDatasetsIncluded, "numberOfDatasetsIncluded.csv", row.names = FALSE)
 
-plotBoxplots <- function(data2.long, fileNameAddition = "") {
+plotBoxplots <- function(data2.long, fileNameAddition = "", height=12, width=18) {
   # For each data characteristic: Median of the median of each data type
   medianValues <- data2.long %>%
     group_by(`Data type`, variable) %>%  
@@ -780,7 +604,7 @@ plotBoxplots <- function(data2.long, fileNameAddition = "") {
     xlab("") +
     ylab("") +
     geom_hline(aes(yintercept = medianValue), medianValues, colour = 'red') +
-    facet_wrap( ~ variable, scales = "free_x", ncol=7, strip.position = "bottom") +
+    facet_wrap( ~ variable, scales = "free_x", ncol=6, strip.position = "bottom") +
     ggplot2::theme_bw() +
     #theme_minimal() + 
     theme(panel.spacing.y=unit(1.5, "lines"),
@@ -793,14 +617,22 @@ plotBoxplots <- function(data2.long, fileNameAddition = "") {
           strip.background = element_blank(),  # Make facet label background white.
           axis.title = element_blank()) +     
     guides(fill = guide_legend(reverse = TRUE))
-  ggsave(file=paste0("boxplots", fileNameAddition, ".pdf"), ggplot.charact, height=12, width=18)
+  ggsave(file=paste0("boxplots", fileNameAddition, ".pdf"), ggplot.charact, height=height, width=width)
 }
 
-plotBoxplots(data2.long, fileNameAddition = "_allDataTypes")
+if (selectedDataTypeLevel == "Data type") {
+  height <- 12
+  width <- 18
+} else {
+  height <- 22
+  width <- 19
+}
+
+plotBoxplots(data2.long, fileNameAddition = "_allDataTypes", height = height, width = width)
 # plotBoxplots(data2.long %>% filter(dataType != "metabolomics_MS"), fileNameAddition = "_metabolomics_MSRemoved")
 
 plotBoxplots(data2.long %>% na.omit() %>% dplyr::group_by(variable) %>% dplyr::mutate(value = rank(value)), 
-             fileNameAddition = "_allDataTypes_ranks")
+             fileNameAddition = "_allDataTypes_ranks", height = height, width = width)
 
 #############################################
 colorForCorValues <- function(data, mapping, method="spearman", use="pairwise", ...){
@@ -856,22 +688,22 @@ plotPairsPlotForTypes <- function(df, groupColName = "Data type", colsForCorr = 
                             #   alpha=0.3)
       )
     }
-
+    
     print(ggpairsObj + 
-      theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 8)) +
-      ggtitle(group) +
-      # theme_bw() +
-      theme(strip.placement = "outside", text = element_text(size = 6))
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 8)) +
+            ggtitle(group) +
+            # theme_bw() +
+            theme(strip.placement = "outside", text = element_text(size = 6))
     )
     
     dev.off()
   }
 }
 
-colsForCorr <- setdiff(colnames(data2), "Data type")
-corrMethod <- "spearman"
-plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = colsForCorr, 
-                      corrMethod = corrMethod, addStr = paste0("_allcols_", corrMethod)) 
+# colsForCorr <- setdiff(colnames(data2), "Data type")
+# corrMethod <- "spearman"
+# plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = colsForCorr, 
+#                       corrMethod = corrMethod, addStr = paste0("_allcols_", corrMethod)) 
 
 #############################################
 # Interesting features based on correlation plot of all columns:
@@ -886,7 +718,7 @@ plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = cols
 # One of: "Mean", "Median", "Min", "Max"
 # One of : "min(% NA in samples)", "max(% NA in samples)", "% NA", "% Analytes with NAs", "% Samples with NAs", 
 
-data2WAbsSkewness <- data2 %>% dplyr::mutate(`|Skewness|` = abs(Skewness))
+
 selForCorr <- c("% Distinct values", 
                 "log2(# Analytes)", "log2(# Samples)", 
                 "Mean", "log2(Variance)", 
@@ -897,12 +729,12 @@ selForCorr <- c("% Distinct values",
                 "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", 
                 "Agglom. coef. hierarch. analyte clustering", 
                 "sd(Intensity w/ prob(NA) = 50% for sample)", "sd(Intensity w/ prob(NA) = 90% for sample)"
-                )
+)
 
 # selForCorr <- selForCorr[order(match(selForCorr, colnames(data2)))]
 
 corrMethod <- "spearman"
-plotPairsPlotForTypes(df = data2WAbsSkewness, groupColName = "Data type", colsForCorr = selForCorr, 
+plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = selForCorr, 
                       corrMethod = corrMethod, width = 14, height = 14, addStr = paste0("_selectedCols_", corrMethod)) 
 
 
@@ -931,16 +763,16 @@ dev.off()
 #############################################
 
 plotPCABiplot <- function(df, groups= c(), alpha = 0.5, 
-                             pcaMethod = "nipals",
-                             coordRatio = 0.5, 
-                             facetZoom = TRUE, 
-                             xlimLower = NA, xlimUpper = NA,
-                             ylimLower = NA, ylimUpper = NA,
-                             PCchoices = 1:2,
+                          pcaMethod = "nipals",
+                          coordRatio = 0.5, 
+                          facetZoom = TRUE, 
+                          xlimLower = NA, xlimUpper = NA,
+                          ylimLower = NA, ylimUpper = NA,
+                          PCchoices = 1:2,
                           ellipse = TRUE) {
   # See https://stackoverflow.com/a/49788251
   #   # devtools::install_github("vqv/ggbiplot")
-
+  
   library(ggbiplot)
   
   iris_dummy<-df
@@ -984,7 +816,7 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
       P2 <- P2 + ylim(c(ylimLower, ylimUpper))
   }
   
-
+  
   P2 <- P2 + theme(legend.direction ='horizontal', 
                    legend.position = 'bottom')
   
@@ -994,49 +826,49 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
 }
 
 plotPCABiplots <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals") {
-    
+  
   pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs2", addStr, ".pdf"), width = 12, height = 10)
   print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-                         groups= df[[groupColName]],
-                         alpha = 0.3,
-                         pcaMethod = pcaMethod,
-                         facetZoom = TRUE,
-                         PCchoices = 1:2,
-                         xlimLower = -4, xlimUpper = 5,
-                         ylimLower = -5, ylimUpper = 8))
+                      groups= df[[groupColName]],
+                      alpha = 0.3,
+                      pcaMethod = pcaMethod,
+                      facetZoom = TRUE,
+                      PCchoices = 1:2,
+                      xlimLower = -4, xlimUpper = 5,
+                      ylimLower = -5, ylimUpper = 8))
   dev.off()
   
   pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs3", addStr, ".pdf"), width = 12, height = 10)
   print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-                         groups= df[[groupColName]],
-                         alpha = 0.3,
-                         pcaMethod = pcaMethod,
-                         facetZoom = TRUE,
-                         PCchoices = c(1, 3),
-                         xlimLower = -5, xlimUpper = 5,
-                         ylimLower = -4, ylimUpper = 8))
+                      groups= df[[groupColName]],
+                      alpha = 0.3,
+                      pcaMethod = pcaMethod,
+                      facetZoom = TRUE,
+                      PCchoices = c(1, 3),
+                      xlimLower = -5, xlimUpper = 5,
+                      ylimLower = -4, ylimUpper = 8))
   dev.off()
   
   pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC2vs3", addStr, ".pdf"), width = 12, height = 10)
   print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-                         groups= df[[groupColName]],
-                         alpha = 0.3,
-                         pcaMethod = pcaMethod,
-                         facetZoom = TRUE,
-                         PCchoices = c(2, 3),
-                         xlimLower = -5, xlimUpper = 7,
-                         ylimLower = -4, ylimUpper = 8
-                         ))
+                      groups= df[[groupColName]],
+                      alpha = 0.3,
+                      pcaMethod = pcaMethod,
+                      facetZoom = TRUE,
+                      PCchoices = c(2, 3),
+                      xlimLower = -5, xlimUpper = 7,
+                      ylimLower = -4, ylimUpper = 8
+  ))
   dev.off()
   
   ## Remove outlier "E-GEOD-152766.aggregated_filtered_counts.mtx"
   # df <- df[row.names(df) != "E-GEOD-152766.aggregated_filtered_counts.mtx", ]
   pdf(file = paste0("biplot_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
   print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-                         groups= df[[groupColName]],
-                         alpha = 0.3,
-                         pcaMethod = pcaMethod,
-                         facetZoom = FALSE))
+                      groups= df[[groupColName]],
+                      alpha = 0.3,
+                      pcaMethod = pcaMethod,
+                      facetZoom = FALSE))
   dev.off()
   
   pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method=pcaMethod, nPcs=4, center=TRUE
@@ -1047,12 +879,12 @@ plotPCABiplots <- function(df, groupColName = "", addStr = "", pcaMethod = "nipa
   library(GGally)
   pdf(paste0("ggpairs_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
   print(GGally::ggpairs(dat, columns = 2:5, ggplot2::aes(colour=get(groupColName)),
-                lower = list(continuous = wrap("smooth", alpha = 0.3, size = 1), 
-                             combo = wrap("dot_no_facet", alpha = 0.4)),
-                upper=list(continuous = wrap("cor", method = "spearman", size = 3)),
-                mapping=aes(color = get(groupColName),
-                            fill= get(groupColName), 
-                            alpha=0.5)) +
+                        lower = list(continuous = wrap("smooth", alpha = 0.3, size = 1), 
+                                     combo = wrap("dot_no_facet", alpha = 0.4)),
+                        upper=list(continuous = wrap("cor", method = "spearman", size = 3)),
+                        mapping=aes(color = get(groupColName),
+                                    fill= get(groupColName), 
+                                    alpha=0.5)) +
           ggtitle(groupColName) +
           theme_bw())
   dev.off()
@@ -1080,124 +912,18 @@ plotPCABiplots <- function(df, groupColName = "", addStr = "", pcaMethod = "nipa
 plotPCABiplots(df = data2.complete, groupColName = "Data type", addStr = "", pcaMethod = "svd") # "svd" or "nipals"
 plotPCABiplots(df = data2, groupColName = "Data type", addStr = "", pcaMethod = "nipals") # "svd" or "nipals"
 
-
-# ####################
-# y <- as.factor(data.complete$`Data type`)
-# levels(y)
-# x <- data.complete %>% select(-c("Data type", "Dataset ID")) 
-# 
-# for (var in toBeLog2Transformed){
-#   # print(var)
-#   x <- log2transform(df = x, variable = var)
-# }
-# 
-# x <- x %>% as.matrix()
-# # Fit parallel cumulative logit model
-# fit1 <- ordinalNet::ordinalNet(x, y, family="cumulative", link="logit",
-#                                parallelTerms=TRUE, nonparallelTerms=FALSE)
-# summary(fit1)
-# coefs <- data.frame(coef(fit1))
-# coefsOver005 <- row.names(coefs)[which(abs(coefs$coef.fit1.) > 0.05)]
-# 
-# # colsForCorr <- c(coefsOver005[!grepl("(Intercept)", coefsOver005)],
-# #                  "Corr(Mean vs. % NA) (Samples)",
-# #                  "Corr(Mean vs. % NA) (Analytes)"
-# #                  )
-
 #####################
 
-dataScUnnormalizedOnly <- data %>% dplyr::filter(`Data type` == "scRNA-seq (unnormalized)")
-# df <- dataScUnnormalizedOnly %>% dplyr::select(-"Dataset ID")
-# groupColName <- "Data type"
-# pcaMethod <- "nipals"
+# dataScUnnormalizedOnly <- data %>% dplyr::filter(`Data type` == "scRNA-seq (unnormalized)")
 # 
-# library(ggbiplot)
-# df <- dataScUnnormalizedOnly %>% dplyr::select(-c("Dataset ID", "Data type"))
-# df <- df %>% dplyr::select(-names(df[, sapply(df, function(v) var(v, na.rm=TRUE)==0)]))
+# scPipeline.df <- read.csv("scAnalysisPipelines.csv")
+# meanSc <- data.frame(mean = dataScUnnormalizedOnly$Mean, 
+#                      nSamples = dataScUnnormalizedOnly$`# Samples`,
+#                      projectId =  gsub("\\..*", "", dataScUnnormalizedOnly$`Dataset ID`))
 # 
-# iris_dummy<-df 
-# iris_dummy[is.na(iris_dummy)]<-7777 #swap out your NAs with a dummy number so prcomp will run
-# pca.obj <- prcomp(iris_dummy, center=TRUE, scale.=TRUE)
-# 
-# # scale: One of "UV" (unit variance a=a/\sigma_{a}), 
-# # "vector" (vector normalisation b=b/|b|), 
-# # "pareto" (sqrt UV) or "none" 
-# # to indicate which scaling should be used to scale the matrix with aa variables and b samples. 
-# pca.obj2 <- pcaMethods::pca(df, method=pcaMethod, nPcs=4, center=TRUE
-#                             , scale = "uv"
-# )
-# 
-# loadings <- pca.obj2@loadings
-# 
-# pca.obj$x<-pca.obj2@scores 
-# pca.obj$rotation<-pca.obj2@loadings 
-# pca.obj$sdev<-pca.obj2@sDev
-# pca.obj$center<-pca.obj2@center
-# pca.obj$scale<-pca.obj2@scale
-# 
-# P2 <- ggbiplot::ggbiplot(pca.obj,
-#                          choices = 1:2,
-#                          obs.scale = 1, 
-#                          var.scale=1,
-#                          ellipse=T,
-#                          circle=F,
-#                          varname.size=2,
-#                          var.axes=T,
-#                          # groups=groups, 
-#                          alpha=0)  +
-#   scale_color_discrete(name = '') 
-# 
-# P2 <- P2 + xlim(c(-8, 8)) + ylim(c(-5, 3))
-# 
-# 
-# P2 <- P2 + theme(legend.direction ='horizontal', 
-#                  legend.position = 'bottom')
-# 
-# groups <- factor(gsub(".*-(.*)-.*", "\\1", dataScUnnormalizedOnly$`Dataset ID`))
-# summary(groups)
-# P2$layers <- c(geom_point(aes(colour=groups), cex=1, alpha = 0.5), P2$layers)
-# print(P2)
-# 
-# 
-# 
-# dataScUnnormalizedOnlyMTAB <- dataScUnnormalizedOnly %>% filter(grepl("MTAB", `Dataset ID`))
-# # dataScUnnormalizedOnlyCURD <- dataScUnnormalizedOnly %>% filter(grepl("CURD", `Dataset ID`))
-# meanMTAB <- data.frame(mean = dataScUnnormalizedOnlyMTAB$Mean, 
-#                        ID = as.numeric(gsub(".*?-.*?-(.*?)\\..*", "\\1", dataScUnnormalizedOnlyMTAB$`Dataset ID`)) )
-# 
-# meanMTAB$above2 <- meanMTAB$mean > 1
-# 
-# p.absolute <- ggplot(meanMTAB, aes(x=above2, y=ID)) + 
-#   geom_violin(alpha=0.5, scale = "width") +
-#   geom_boxplot(width=0.5, alpha=0.25, outlier.size=0.5) +
-#   geom_jitter(shape=16, position=position_jitter(0.2))
-# 
-# p.rank <- ggplot(meanMTAB, aes(x=above2, y=rank(ID))) + 
-#   geom_violin(alpha=0.5, scale = "width") +
-#   geom_boxplot(width=0.5, alpha=0.25, outlier.size=0.5) +
-#   geom_jitter(shape=16, position=position_jitter(0.2))
-# 
-# p.absolute
-# p.rank
-# 
-# ggplot(meanMTAB, aes(x=mean, y=ID)) + 
-#   geom_point(alpha=0.5, scale = "width")
-# 
-# ggplot(meanMTAB, aes(x=mean, y=rank(ID))) + 
-#   geom_point(alpha=0.5, scale = "width")
-# 
-# 
-# length(unique(dataScUnnormalizedOnly$`Dataset ID`))
-
-
-scPipeline.df <- read.csv("scAnalysisPipelines.csv")
-meanSc <- data.frame(mean = dataScUnnormalizedOnly$Mean, 
-                     nSamples = dataScUnnormalizedOnly$`# Samples`,
-                     projectId =  gsub("\\..*", "", dataScUnnormalizedOnly$`Dataset ID`))
-
-meanSc <- dplyr::left_join(meanSc, scPipeline.df)
-ggplot(meanSc, aes(x=mean, y=log2(nSamples))) + 
-  geom_point(aes(color = technology), alpha=0.5, scale = "width")
+# meanSc <- dplyr::left_join(meanSc, scPipeline.df)
+# ggplot(meanSc, aes(x=mean, y=log2(nSamples))) + 
+#   geom_point(aes(color = technology), alpha=0.5, scale = "width")
 
 #####################
 
