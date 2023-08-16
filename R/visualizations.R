@@ -200,10 +200,10 @@ prideMeta.df.forIncludedPrideIDs <- rbind(prideMeta.df.forIncludedPrideIDs,
                                           )
 prideMeta.df.forIncludedPrideIDs$instruments <- gsub(";MaxQuant", "", prideMeta.df.forIncludedPrideIDs$instruments)
 write.csv(data.frame(instrument = sort(unique(unlist(strsplit(prideMeta.df.forIncludedPrideIDs$instruments, ";"))))), 
-          "prideMetaInstruments.csv",
+          "proteomicsPride_instruments.csv",
           row.names = FALSE)
 
-prideMetaInstrumentsManufacturerAdded.df <- read.csv("prideMetaInstruments_manufacturerAdded.csv")
+prideMetaInstrumentsManufacturerAdded.df <- read.csv("proteomicsPride_instruments_manufacturers.csv")
 
 
 
