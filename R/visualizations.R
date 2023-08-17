@@ -8,6 +8,284 @@ library(ggforce)
 library(stringr)
 theme_set(theme_bw())
 
+################################################################################
+################################################################################
+# FUNCTIONS
+
+translateTermsInColumns <- function(oldAndID.df, translation.df, oldCol = "old", idCol = "ID", multipleHandling = "Multiple") {
+  replaced <- strsplit(oldAndID.df[,oldCol], ";")
+  for (row in seq(nrow(translation.df))) {
+    replaced <- rapply(replaced, function(x){
+      gsub(paste0("^", translation.df[row, ]$old, "$"),
+           translation.df[row, ]$new, x)
+    }, how = "list")
+  }
+  
+  replaced2 <- rapply(replaced, function(x){ifelse(length(unique(x))>1, multipleHandling, unique(x))
+  }, how = "list")
+  
+  replaced2.df <- data.frame(ID = oldAndID.df[,idCol], old = oldAndID.df[,oldCol], new = unlist(replaced2))
+  replaced2.df
+}
+
+
+logTransform <- function(df, variable, logBase = c("log2", "log1p")){
+  df[[paste0(logBase, "(", variable, ")")]] <- get(logBase)(df[[variable]])
+  df[[variable]] <- NULL
+  df
+}
+
+
+plotBoxplots <- function(data2.long, fileNameAddition = "", height=12, width=18) {
+  # For each data characteristic: Median of the median of each data type
+  medianValues <- data2.long %>%
+    group_by(`Data type`, variable) %>%  
+    summarise(medianValue = median(value, na.rm=T)) %>%
+    group_by(variable) %>%  
+    summarise(medianValue = median(medianValue, na.rm=T))
+  write.csv(medianValues, paste0("medianValues", fileNameAddition,".csv"), row.names = FALSE)
+  
+  ggplot.charact <- ggplot(data2.long, aes(forcats::fct_rev(`Data type`), value)) +
+    # geom_boxplot(aes(fill = `Data type`), alpha=0.5, outlier.size=0.5) +
+    geom_violin(aes(fill = `Data type`), alpha=0.5, scale = "width") +
+    geom_boxplot(aes(fill = `Data type`), width=0.5, alpha=0.25, outlier.size=0.5) +
+    coord_flip() +
+    xlab("") +
+    ylab("") +
+    geom_hline(aes(yintercept = medianValue), medianValues, colour = 'red') +
+    facet_wrap( ~ variable, scales = "free_x", ncol=6, strip.position = "bottom") +
+    ggplot2::theme_bw() +
+    #theme_minimal() + 
+    theme(panel.spacing.y=unit(1.5, "lines"),
+          legend.title = element_blank(), axis.text.y = element_text(hjust=0, face = "bold"), 
+          # legend.position="bottom",
+          legend.position = "none",
+          legend.justification = "left", legend.direction = "horizontal",
+          strip.text = element_text(face="bold", size = 6),
+          strip.placement = "outside",                      # Place facet labels outside x axis labels.
+          strip.background = element_blank(),  # Make facet label background white.
+          axis.title = element_blank()) +     
+    guides(fill = guide_legend(reverse = TRUE))
+  ggsave(file=paste0("boxplots", fileNameAddition, ".pdf"), ggplot.charact, height=height, width=width)
+}
+
+colorForCorValues <- function(data, mapping, method="spearman", use="pairwise", ...){
+  
+  # grab data
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  
+  # calculate correlation
+  corr <- cor(x, y, method=method, use=use)
+  
+  # calculate colour based on correlation value
+  # Here I have set a correlation of minus one to blue, 
+  # zero to white, and one to red 
+  # Change this to suit: possibly extend to add as an argument of `my_fn`
+  colFn <- colorRampPalette(c("blue", "white", "red"), interpolate ='spline')
+  fill <- colFn(100)[findInterval(corr, seq(-1, 1, length=100))]
+  
+  ggally_cor(data = data, mapping = mapping, 
+             method = method,
+             colour = "black", ...) + 
+    theme_void() +
+    theme(panel.background = element_rect(fill=fill))
+}
+
+
+
+plotPairsPlotForTypes <- function(df, groupColName = "Data type", colsForCorr = c(), corrMethod = "spearman", 
+                                  smooth = FALSE, width = 19, height = 19, addStr = "") {
+  for (group in unlist(unique(df[, groupColName]))){
+    print(group)
+    df.group <- df[df[, groupColName] == group,]
+    df.group <- df.group[, colsForCorr]
+    colnames(df.group) <- stringr::str_wrap(colnames(df.group), width = 15)
+    pdf(paste0("ggpairs_", gsub(" ", "_", group), addStr, ".pdf"), width = width, height = height)
+    if (smooth) {
+      ggpairsObj <- ggpairs(df.group, 
+                            lower = list(continuous = wrap("smooth", alpha = 0.1, size = 0.1)),
+                            upper = list(continuous = wrap(colorForCorValues, method = corrMethod, size = 2.5),
+                                         continuous = "smooth") #,
+                            # mapping=aes(# color = get(groupColName),
+                            #   # fill= get(groupColName),
+                            #   alpha=0.3)
+      )
+    } else {
+      ggpairsObj <- ggpairs(df.group, 
+                            # lower = list(continuous = wrap("smooth", alpha = 0.1, size = 0.1)),
+                            lower = list(continuous = wrap("points", alpha = 0.1, size = 0.1)),
+                            upper = list(continuous = wrap(colorForCorValues, method = corrMethod, size = 2.5),
+                                         continuous = "smooth") #,
+                            # mapping=aes(# color = get(groupColName),
+                            #   # fill= get(groupColName),
+                            #   alpha=0.3)
+      )
+    }
+    
+    print(ggpairsObj + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 8)) +
+            ggtitle(group) +
+            # theme_bw() +
+            theme(strip.placement = "outside", text = element_text(size = 6))
+    )
+    
+    dev.off()
+  }
+}
+
+
+plotPCABiplot <- function(df, groups= c(), alpha = 0.5, 
+                          pcaMethod = "nipals",
+                          coordRatio = 0.5, 
+                          facetZoom = TRUE, 
+                          xlimLower = NA, xlimUpper = NA,
+                          ylimLower = NA, ylimUpper = NA,
+                          PCchoices = 1:2,
+                          ellipse = TRUE) {
+  # See https://stackoverflow.com/a/49788251
+  #   # devtools::install_github("vqv/ggbiplot")
+  
+  library(ggbiplot)
+  
+  iris_dummy<-df
+  iris_dummy[is.na(iris_dummy)]<-7777 #swap out your NAs with a dummy number so prcomp will run
+  pca.obj <- prcomp(iris_dummy, center=TRUE, scale.=TRUE)
+  
+  # scale: One of "UV" (unit variance a=a/\sigma_{a}), 
+  # "vector" (vector normalisation b=b/|b|), 
+  # "pareto" (sqrt UV) or "none" 
+  # to indicate which scaling should be used to scale the matrix with aa variables and b samples. 
+  pca.obj2 <- pcaMethods::pca(df, method=pcaMethod, nPcs=4, center=TRUE
+                              , scale = "uv"
+  )
+  
+  pca.obj$x<-pca.obj2@scores 
+  pca.obj$rotation<-pca.obj2@loadings 
+  pca.obj$sdev<-pca.obj2@sDev
+  pca.obj$center<-pca.obj2@center
+  pca.obj$scale<-pca.obj2@scale
+  
+  P2 <- ggbiplot::ggbiplot(pca.obj,
+                           choices = PCchoices,
+                           obs.scale = 1, 
+                           var.scale=1,
+                           ellipse=ellipse,
+                           circle=F,
+                           varname.size=3,
+                           var.axes=T,
+                           groups=groups, 
+                           alpha=0)  +
+    scale_color_discrete(name = '') +  
+    coord_fixed(ratio = coordRatio)
+  
+  if (facetZoom) {
+    P2 <- P2 + ggforce::facet_zoom(xlim = c(xlimLower, xlimUpper), ylim = c(ylimLower, ylimUpper))
+  } else {
+    if (!all(is.na(c(xlimLower, xlimUpper))))
+      P2 <- P2 + xlim(c(xlimLower, xlimUpper))
+    
+    if (!all(is.na(c(ylimLower, ylimUpper))))
+      P2 <- P2 + ylim(c(ylimLower, ylimUpper))
+  }
+  
+  
+  P2 <- P2 + theme(legend.direction ='horizontal', 
+                   legend.position = 'bottom')
+  
+  P2$layers <- c(geom_point(aes(colour=groups), cex=1, alpha = alpha), P2$layers)
+  
+  P2
+}
+
+plotPCABiplots <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals") {
+  
+  pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs2_", addStr, ".pdf"), width = 12, height = 10)
+  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
+                      groups= df[[groupColName]],
+                      alpha = 0.3,
+                      pcaMethod = pcaMethod,
+                      facetZoom = TRUE,
+                      PCchoices = 1:2,
+                      xlimLower = -4, xlimUpper = 5,
+                      ylimLower = -5, ylimUpper = 8))
+  dev.off()
+  
+  pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs3_", addStr, ".pdf"), width = 12, height = 10)
+  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
+                      groups= df[[groupColName]],
+                      alpha = 0.3,
+                      pcaMethod = pcaMethod,
+                      facetZoom = TRUE,
+                      PCchoices = c(1, 3),
+                      xlimLower = -5, xlimUpper = 5,
+                      ylimLower = -4, ylimUpper = 8))
+  dev.off()
+  
+  pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC2vs3_", addStr, ".pdf"), width = 12, height = 10)
+  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
+                      groups= df[[groupColName]],
+                      alpha = 0.3,
+                      pcaMethod = pcaMethod,
+                      facetZoom = TRUE,
+                      PCchoices = c(2, 3),
+                      xlimLower = -5, xlimUpper = 7,
+                      ylimLower = -4, ylimUpper = 8
+  ))
+  dev.off()
+  
+  ## Remove outlier "E-GEOD-152766.aggregated_filtered_counts.mtx"
+  # df <- df[row.names(df) != "E-GEOD-152766.aggregated_filtered_counts.mtx", ]
+  pdf(file = paste0("biplot_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
+  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
+                      groups= df[[groupColName]],
+                      alpha = 0.3,
+                      pcaMethod = pcaMethod,
+                      facetZoom = FALSE))
+  dev.off()
+  
+  pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method=pcaMethod, nPcs=4, center=TRUE
+                         , scale = "uv")
+  write.csv(pca@loadings, paste0("loadings_",  pcaMethod, "_", addStr,".csv"))
+  dat <- merge(pcaMethods::scores(pca), df, by=0)
+  
+  library(GGally)
+  pdf(paste0("ggpairs_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
+  print(GGally::ggpairs(dat, columns = 2:5, ggplot2::aes(colour=get(groupColName)),
+                        lower = list(continuous = wrap("smooth", alpha = 0.3, size = 1), 
+                                     combo = wrap("dot_no_facet", alpha = 0.4)),
+                        upper=list(continuous = wrap("cor", method = "spearman", size = 3)),
+                        mapping=aes(color = get(groupColName),
+                                    fill= get(groupColName), 
+                                    alpha=0.5)) +
+          ggtitle(groupColName) +
+          theme_bw())
+  dev.off()
+  
+  library(plotly)
+  library(htmlwidgets)
+  fig <- plot_ly(dat, x = ~PC1, y = ~PC2, z = ~PC3, 
+                 color = ~as.factor(dat[[groupColName]]), 
+                 type="scatter3d", mode="markers",
+                 #colors = c('#636EFA','#EF553B') , 
+                 marker = list(size = 2)
+                 # , alpha = 0.75
+  ) #%>%
+  # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
+  fig <- fig %>%
+    layout(
+      title = "3D PCA",
+      scene = list(bgcolor = "#e5ecf6"
+      )
+    )
+  
+  htmlwidgets::saveWidget(fig, paste0("plotly_", pcaMethod, "_", addStr,".html"), selfcontained = F, libdir = "lib")
+}
+
+################################################################################
+################################################################################
+
+
 dataset <- ldply(list.files("20230614_results", pattern = ".csv", full.names = TRUE), read.csv, header=TRUE)
 dataset <- dataset[dataset$nSamples>0,]
 dataset <- dataset[dataset$variance>0,]
@@ -106,26 +384,6 @@ write.csv(data.frame(instrument = sort(unique(unlist(strsplit(prideMeta.df.forIn
 
 prideMetaInstrumentsManufacturerAdded.df <- read.csv("proteomicsPride_instruments_manufacturers.csv")
 
-
-
-
-translateTermsInColumns <- function(oldAndID.df, translation.df, oldCol = "old", idCol = "ID", multipleHandling = "Multiple") {
-  replaced <- strsplit(oldAndID.df[,oldCol], ";")
-  for (row in seq(nrow(translation.df))) {
-    replaced <- rapply(replaced, function(x){
-      gsub(paste0("^", translation.df[row, ]$old, "$"),
-           translation.df[row, ]$new, x)
-    }, how = "list")
-  }
-  
-  replaced2 <- rapply(replaced, function(x){ifelse(length(unique(x))>1, multipleHandling, unique(x))
-  }, how = "list")
-  
-  replaced2.df <- data.frame(ID = oldAndID.df[,idCol], old = oldAndID.df[,oldCol], new = unlist(replaced2))
-  replaced2.df
-}
-
-
 prideTranslation.df <- translateTermsInColumns(oldAndID.df = prideMeta.df.forIncludedPrideIDs, 
                                                translation.df = prideMetaInstrumentsManufacturerAdded.df %>%
                                                  dplyr::rename("old" = "instrument", "new" = "manufacturer"), 
@@ -217,12 +475,38 @@ data <- dataset %>% dplyr::filter(!(datasetID %in% c("E-GEOD-152766.aggregated_f
                                                      "MTBLS407_m_MTBLS407_21548_metabolite_profiling_mass_spectrometry_v2_maf.tsv")))
 
 
-# Check for duplicates
-data.duplicateRowsOnly <- data[which(duplicated(data %>% select(-datasetID)) | duplicated(data %>% select(-datasetID), fromLast = TRUE)), ]
+# # Check for duplicates --> e.g. because a dataset was re-uploaded under a different 
+# # file name and the old and new file were both present on the FTP server, 
+# # or if dataset was reuploaded under a different project ID
+data.duplicateRowsOnly <- data[which(duplicated(data %>% select(-datasetID)) | duplicated(data %>% select(-datasetID), fromLast = TRUE)), ] %>% arrange(nAnalytes, minRowNonNaNumber, mean)
+data.duplicateRowsOnly2 <- data[which(duplicated(data %>% select(-c(datasetID, dataType, dataTypeSubgroups))) | duplicated(data %>% select(-c(datasetID, dataType, dataTypeSubgroups)), fromLast = TRUE)), ] %>% arrange(nAnalytes, minRowNonNaNumber, mean)
+
+dataDiff <- data[data$datasetID %in% setdiff(data.duplicateRowsOnly2$datasetID, data.duplicateRowsOnly$datasetID), ]
+
+
+
+# Remove as they are datasets present also in scProteomics category:
+# "PXD006847_CulturedCells_proteinGroups.txt_^Intensity_",
+# "PXD006847_CulturedCells_proteinGroups.txt_^iBAQ_",
+# "PXD006847_CulturedCells_proteinGroups.txt_^Intensity_"
+# "PXD021882_proteinGroups.txt_^LFQ_"
+# "PXD021882_proteinGroups.txt_^Intensity_"
+
+# Remove as it has duplicate in different category
+# "MTBLS103_m_ibanez_02_metabolite_profiling_mass_spectrometry_v2_maf.tsv"
+
+data <- data[!(data$datasetID %in% c("PXD006847_CulturedCells_proteinGroups.txt_^LFQ_",
+                                     "PXD006847_CulturedCells_proteinGroups.txt_^iBAQ_",
+                                     "PXD006847_CulturedCells_proteinGroups.txt_^Intensity_",
+                                     "PXD021882_proteinGroups.txt_^LFQ_",
+                                     "PXD021882_proteinGroups.txt_^Intensity_",
+                                     "MTBLS103_m_ibanez_02_metabolite_profiling_mass_spectrometry_v2_maf.tsv")),]
+
+##  Duplicate rows removed
+data <- data[-which(duplicated(data %>% select(-datasetID))), ]
 
 
 write.csv(data, "datasets_results.csv", row.names = FALSE)
-write.csv(data.frame(table(data[, "dataType"])), "numberOfDatasets.csv", row.names = FALSE)
 
 ################################################################################
 ################################################################################
@@ -397,535 +681,229 @@ data <- data %>% dplyr::mutate(`|Skewness|` = abs(Skewness))
 
 write.csv(data, "datasets_results_clean_renamed.csv", row.names = FALSE)
 
-
+write.csv(data.frame(table(data[, "Data type" ])), "numberOfDatasets.csv", row.names = FALSE)
+write.csv(data.frame(table(data[, "Data type subgroups" ])), "numberOfDatasets_subgroups.csv", row.names = FALSE)
 ################################################################################
 
 
 
 allDataTypeLevels <- c("Data type", "Data type subgroups")
-selectedDataTypeLevel <- "Data type subgroups"
+# selectedDataTypeLevel <- "Data type subgroups"
 
-
-data <- data %>% select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
-data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5) %>% ungroup
-
-################################################################################
-boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
-                                "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
-                                "% NA", "% Analytes with NAs", "% Samples with NAs", "Mean", 
-                                "Median", "Min", "Max", "median(Variance of samples)", "median(Variance of analytes)", 
-                                "Variance", "Kurtosis", "Skewness", "|Skewness|", "% Var. explained by PC1", 
-                                "% Var. explained by PC2", "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
-                                "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", "Agglom. coef. hierarch. analyte clustering", 
-                                "% Distinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
-                                "sd(Intensity w/ prob(NA) = 50% for sample)", 
-                                "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
-
-# boxplotCols <-  c("nSamples", "nAnalytes", 
-#                    "medianSampleVariance", "medianAnalyteVariance",
-#                    "median", "skewness", "prctPC1", "prctPC2",
-#                    "corSampleMeanNA", "corAnalyteMeanNA", "percNATotal")
-
-
-# data2 <- data[, c("Data type", 
-#                   boxplotCols, microarrayCols)]
-
-data2 <- data[, c("Data type", 
-                  boxplotCols)]
-
-# To be log2-transformed:
-toBeLog2Transformed <- c("# Samples", "# Analytes", 
-                         "min(% NA in analytes)", "max(% NA in analytes)", 
-                         "% Analytes with NAs", "% Samples with NAs",
-                         "median(Variance of samples)", "median(Variance of analytes)", 
-                         "Variance", "Kurtosis", "|Skewness|", "Skewness",
-                         "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
-                         "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)",
-                         "sd(Intensity w/ prob(NA) = 50% for sample)", 
-                         "sd(Intensity w/ prob(NA) = 90% for sample)")
-
-
-# matrixStats::colMins(data2 %>% select(-"Data type") %>% as.matrix, na.rm = TRUE)
-
-colsWithNegativeNumbers <- colnames(data2[, sapply(data2, FUN = function(x) any(x <= 0, na.rm = TRUE))])
-# [1] "min(% NA in analytes)"                            "max(% NA in analytes)"                           
-# [3] "min(% NA in samples)"                             "max(% NA in samples)"                            
-# [5] "% NA"                                             "% Analytes with NAs"                             
-# [7] "% Samples with NAs"                               "Mean"                                            
-# [9] "Median"                                           "Min"                                             
-# [11] "Max"                                              "median(Variance of samples)"                     
-# [13] "median(Variance of analytes)"                     "Kurtosis"                                        
-# [15] "Skewness"                                         "Lin. coef. of Poly2(Means vs. Vars) (Analytes)"  
-# [17] "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)" "Corr(Mean vs. % NA) (Samples)"                   
-# [19] "Corr(Mean vs. % NA) (Analytes)"                   "sd(Intensity w/ prob(NA) = 50% for sample)"      
-# [21] "sd(Intensity w/ prob(NA) = 90% for sample)"      
-
-toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)
-# "# Samples"  "# Analytes" "Variance"  
-
-logTransform <- function(df, variable, logBase = c("log2", "log1p")){
-  df[[paste0(logBase, "(", variable, ")")]] <- get(logBase)(df[[variable]])
-  df[[variable]] <- NULL
-  df
-}
-
-for (var in toBeLog2Transformed){
-  # print(var)
-  data2 <- logTransform(df = data2, variable = var, logBase = "log2")
-}
-
-for (var in c("median(Variance of samples)", "median(Variance of analytes)")){
-  # print(var)
-  data2 <- logTransform(df = data2, variable = var, logBase = "log1p")
-}
-
-write.csv(data2, "data2.csv", row.names = FALSE)
-data2[sapply(data2, is.infinite)] <- NA
-
-dput(colnames(data2))
-
-
-naRelatedCols <- c("Corr(Mean vs. % NA) (Samples)", 
-                   "Corr(Mean vs. % NA) (Samples) (p-Value)", 
-                   "Corr(Mean vs. % NA) (Analytes)", 
-                   "Corr(Mean vs. % NA) (Analytes) (p-Value)", 
-                   "sd(Intensity w/ prob(NA) = 50% for sample)", 
-                   "sd(Intensity w/ prob(NA) = 90% for sample)",
-                   "# Samples w/ intensityNAProb50.sd or intensityNAProb90.sd",
-                   "Bimodality of sample correlations"
-)
-
-data2.complete <- data2[,!(colnames(data2) %in% naRelatedCols)]
-
-data2.complete <- data2.complete[complete.cases(data2.complete), ]
-
-#############################################
-
-# data2MicroarrayOnly <- data2 %>% dplyr::filter(`Data type` == "Microarray")
-# 
-# 
-# for (groupColName in microarrayCols){
-#   df <- data2MicroarrayOnly
-#   colsToRemove <- c("Data type", setdiff(microarrayCols, groupColName))
-#   df <- df %>% dplyr::select(-colsToRemove)
-#   df <- df[sapply(df, function(x) length(unique(na.omit(x)))) > 1]
-#   
-#   
-#   library(ggbiplot)
-#   pcaMethod <- "nipals"
-#   pdf(file = paste0("biplot_Microarray_", groupColName, ".pdf"), width = 20, height = 20)
-#   print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-#                       groups= df[[groupColName]],
-#                       alpha = 0.3,
-#                       coordRatio = 1,
-#                       pcaMethod = pcaMethod,
-#                       xlimLower = -10, xlimUpper = 10,
-#                       ylimLower = -10, ylimUpper = 10,
-#                       facetZoom = FALSE, 
-#                       ellipse = TRUE) 
-#         # + theme(legend.position = "none")
-#   )
-#   dev.off()
-#   
-#   groups= df[[groupColName]]
-#   
-#   pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method=pcaMethod, nPcs=4, center=TRUE
-#                          , scale = "uv")
-#   dat <- merge(pcaMethods::scores(pca), df, by=0)
-#   
-#   library(plotly)
-#   library(htmlwidgets)
-#   fig <- plot_ly(dat, x = ~PC1, y = ~PC2, z = ~PC3, 
-#                  color = ~as.factor(dat[[groupColName]]), 
-#                  type="scatter3d", mode="markers",
-#                  #colors = c('#636EFA','#EF553B') , 
-#                  marker = list(size = 2)
-#                  # , alpha = 0.75
-#   ) #%>%
-#   # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
-#   fig <- fig %>%
-#     layout(
-#       title = "3D PCA",
-#       scene = list(bgcolor = "#e5ecf6"
-#       )
-#     )
-#   
-#   htmlwidgets::saveWidget(fig, paste0("plotly_", pcaMethod,"_Microarray_", groupColName,".html"), selfcontained = F, libdir = "lib")
-# }
-
-
-#############################################
-
-data2.long <- reshape2::melt(data2)
-
-neworder <- c("Data type", 
-              "log2(# Analytes)", "log2(# Samples)", 
-              "Mean", "Median", "Min", "Max", 
-              "log1p(median(Variance of samples))", "log1p(median(Variance of analytes))", "log2(Variance)",
-              "Kurtosis", "Skewness", "log2(|Skewness|)", "% Distinct values",
-              "% NA",
-              "min(% NA in samples)", "max(% NA in samples)",  
-              "min(% NA in analytes)", "max(% NA in analytes)", 
-              "% Analytes with NAs", "% Samples with NAs", 
-              "sd(Intensity w/ prob(NA) = 50% for sample)", 
-              "sd(Intensity w/ prob(NA) = 90% for sample)",
-              "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)", 
-              "% Var. explained by PC1", "% Var. explained by PC2", 
-              "Agglom. coef. hierarch. analyte clustering",
-              "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
-              "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)"
-)
-
-data2.long <- dplyr::arrange(dplyr::mutate(data2.long,
-                                           variable=factor(variable,levels=neworder)), variable)
-
-
-numberOfDatasetsIncluded <- data2.long %>% 
-  na.omit() %>%
-  group_by(`Data type`, variable) %>%  tally() %>%
-  ungroup()
-colnames(numberOfDatasetsIncluded) <- c("Data type", "variable", "count")
-write.csv(numberOfDatasetsIncluded, "numberOfDatasetsIncluded.csv", row.names = FALSE)
-
-plotBoxplots <- function(data2.long, fileNameAddition = "", height=12, width=18) {
-  # For each data characteristic: Median of the median of each data type
-  medianValues <- data2.long %>%
-    group_by(`Data type`, variable) %>%  
-    summarise(medianValue = median(value, na.rm=T)) %>%
-    group_by(variable) %>%  
-    summarise(medianValue = median(medianValue, na.rm=T))
-  write.csv(medianValues, paste0("medianValues", fileNameAddition,".csv"), row.names = FALSE)
+for (selectedDataTypeLevel in allDataTypeLevels) {
   
-  ggplot.charact <- ggplot(data2.long, aes(forcats::fct_rev(`Data type`), value)) +
-    # geom_boxplot(aes(fill = `Data type`), alpha=0.5, outlier.size=0.5) +
-    geom_violin(aes(fill = `Data type`), alpha=0.5, scale = "width") +
-    geom_boxplot(aes(fill = `Data type`), width=0.5, alpha=0.25, outlier.size=0.5) +
-    coord_flip() +
-    xlab("") +
-    ylab("") +
-    geom_hline(aes(yintercept = medianValue), medianValues, colour = 'red') +
-    facet_wrap( ~ variable, scales = "free_x", ncol=6, strip.position = "bottom") +
-    ggplot2::theme_bw() +
-    #theme_minimal() + 
-    theme(panel.spacing.y=unit(1.5, "lines"),
-          legend.title = element_blank(), axis.text.y = element_text(hjust=0, face = "bold"), 
-          # legend.position="bottom",
-          legend.position = "none",
-          legend.justification = "left", legend.direction = "horizontal",
-          strip.text = element_text(face="bold", size = 6),
-          strip.placement = "outside",                      # Place facet labels outside x axis labels.
-          strip.background = element_blank(),  # Make facet label background white.
-          axis.title = element_blank()) +     
-    guides(fill = guide_legend(reverse = TRUE))
-  ggsave(file=paste0("boxplots", fileNameAddition, ".pdf"), ggplot.charact, height=height, width=width)
-}
-
-if (selectedDataTypeLevel == "Data type") {
-  height <- 12
-  width <- 18
-} else {
-  height <- 22
-  width <- 19
-}
-
-plotBoxplots(data2.long, fileNameAddition = "_allDataTypes", height = height, width = width)
-# plotBoxplots(data2.long %>% filter(dataType != "metabolomics_MS"), fileNameAddition = "_metabolomics_MSRemoved")
-
-plotBoxplots(data2.long %>% na.omit() %>% dplyr::group_by(variable) %>% dplyr::mutate(value = rank(value)), 
-             fileNameAddition = "_allDataTypes_ranks", height = height, width = width)
-
-#############################################
-colorForCorValues <- function(data, mapping, method="spearman", use="pairwise", ...){
+  data <- data %>% select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
+  data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5) %>% ungroup
   
-  # grab data
-  x <- eval_data_col(data, mapping$x)
-  y <- eval_data_col(data, mapping$y)
+  ################################################################################
+  boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
+                                  "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
+                                  "% NA", "% Analytes with NAs", "% Samples with NAs", "Mean", 
+                                  "Median", "Min", "Max", "median(Variance of samples)", "median(Variance of analytes)", 
+                                  "Variance", "Kurtosis", "Skewness", "|Skewness|", "% Var. explained by PC1", 
+                                  "% Var. explained by PC2", "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+                                  "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", "Agglom. coef. hierarch. analyte clustering", 
+                                  "% Distinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
+                                  "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                                  "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
   
-  # calculate correlation
-  corr <- cor(x, y, method=method, use=use)
+  # boxplotCols <-  c("nSamples", "nAnalytes", 
+  #                    "medianSampleVariance", "medianAnalyteVariance",
+  #                    "median", "skewness", "prctPC1", "prctPC2",
+  #                    "corSampleMeanNA", "corAnalyteMeanNA", "percNATotal")
   
-  # calculate colour based on correlation value
-  # Here I have set a correlation of minus one to blue, 
-  # zero to white, and one to red 
-  # Change this to suit: possibly extend to add as an argument of `my_fn`
-  colFn <- colorRampPalette(c("blue", "white", "red"), interpolate ='spline')
-  fill <- colFn(100)[findInterval(corr, seq(-1, 1, length=100))]
   
-  ggally_cor(data = data, mapping = mapping, 
-             method = method,
-             colour = "black", ...) + 
-    theme_void() +
-    theme(panel.background = element_rect(fill=fill))
-}
-
-
-
-plotPairsPlotForTypes <- function(df, groupColName = "Data type", colsForCorr = c(), corrMethod = "spearman", 
-                                  smooth = FALSE, width = 19, height = 19, addStr = "") {
-  for (group in unlist(unique(df[, groupColName]))){
-    print(group)
-    df.group <- df[df[, groupColName] == group,]
-    df.group <- df.group[, colsForCorr]
-    colnames(df.group) <- stringr::str_wrap(colnames(df.group), width = 15)
-    pdf(paste0("ggpairs_", gsub(" ", "_", group), addStr, ".pdf"), width = width, height = height)
-    if (smooth) {
-      ggpairsObj <- ggpairs(df.group, 
-                            lower = list(continuous = wrap("smooth", alpha = 0.1, size = 0.1)),
-                            upper = list(continuous = wrap(colorForCorValues, method = corrMethod, size = 2.5),
-                                         continuous = "smooth") #,
-                            # mapping=aes(# color = get(groupColName),
-                            #   # fill= get(groupColName),
-                            #   alpha=0.3)
-      )
-    } else {
-      ggpairsObj <- ggpairs(df.group, 
-                            # lower = list(continuous = wrap("smooth", alpha = 0.1, size = 0.1)),
-                            lower = list(continuous = wrap("points", alpha = 0.1, size = 0.1)),
-                            upper = list(continuous = wrap(colorForCorValues, method = corrMethod, size = 2.5),
-                                         continuous = "smooth") #,
-                            # mapping=aes(# color = get(groupColName),
-                            #   # fill= get(groupColName),
-                            #   alpha=0.3)
-      )
-    }
-    
-    print(ggpairsObj + 
-            theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 8)) +
-            ggtitle(group) +
-            # theme_bw() +
-            theme(strip.placement = "outside", text = element_text(size = 6))
-    )
-    
-    dev.off()
+  # data2 <- data[, c("Data type", 
+  #                   boxplotCols, microarrayCols)]
+  
+  data2 <- data[, c("Data type", 
+                    boxplotCols)]
+  
+  # To be log2-transformed:
+  toBeLog2Transformed <- c("# Samples", "# Analytes", 
+                           "min(% NA in analytes)", "max(% NA in analytes)", 
+                           "% Analytes with NAs", "% Samples with NAs",
+                           "median(Variance of samples)", "median(Variance of analytes)", 
+                           "Variance", "Kurtosis", "|Skewness|", "Skewness",
+                           "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+                           "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)",
+                           "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                           "sd(Intensity w/ prob(NA) = 90% for sample)")
+  
+  
+  # matrixStats::colMins(data2 %>% select(-"Data type") %>% as.matrix, na.rm = TRUE)
+  
+  colsWithNegativeNumbers <- colnames(data2[, sapply(data2, FUN = function(x) any(x <= 0, na.rm = TRUE))])
+  # [1] "min(% NA in analytes)"                            "max(% NA in analytes)"                           
+  # [3] "min(% NA in samples)"                             "max(% NA in samples)"                            
+  # [5] "% NA"                                             "% Analytes with NAs"                             
+  # [7] "% Samples with NAs"                               "Mean"                                            
+  # [9] "Median"                                           "Min"                                             
+  # [11] "Max"                                              "median(Variance of samples)"                     
+  # [13] "median(Variance of analytes)"                     "Kurtosis"                                        
+  # [15] "Skewness"                                         "Lin. coef. of Poly2(Means vs. Vars) (Analytes)"  
+  # [17] "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)" "Corr(Mean vs. % NA) (Samples)"                   
+  # [19] "Corr(Mean vs. % NA) (Analytes)"                   "sd(Intensity w/ prob(NA) = 50% for sample)"      
+  # [21] "sd(Intensity w/ prob(NA) = 90% for sample)"      
+  
+  toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)
+  # "# Samples"  "# Analytes" "Variance"  
+  
+  
+  
+  for (var in toBeLog2Transformed){
+    # print(var)
+    data2 <- logTransform(df = data2, variable = var, logBase = "log2")
   }
-}
-
-# colsForCorr <- setdiff(colnames(data2), "Data type")
-# corrMethod <- "spearman"
-# plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = colsForCorr, 
-#                       corrMethod = corrMethod, addStr = paste0("_allcols_", corrMethod)) 
-
-#############################################
-# Interesting features based on correlation plot of all columns:
-# "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
-# "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", 
-# "sd(Intensity w/ prob(NA) = 50% for sample)", "sd(Intensity w/ prob(NA) = 90% for sample)", 
-# "max(% NA in analytes)", "log2(# Samples)",  "% Distinct values",
-# "Agglom. coef. hierarch. analyte clustering", "log2(# Analytes)",
-# "Kurtosis", "Skewness",
-
-# One of: "median(Variance of samples)", "log2(Variance)"
-# One of: "Mean", "Median", "Min", "Max"
-# One of : "min(% NA in samples)", "max(% NA in samples)", "% NA", "% Analytes with NAs", "% Samples with NAs", 
-
-
-selForCorr <- c("% Distinct values", 
-                "log2(# Analytes)", "log2(# Samples)", 
-                "Mean", "log2(Variance)", 
-                "% NA", "max(% NA in analytes)", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
-                "Skewness", "|Skewness|", "Kurtosis", 
-                "% Var. explained by PC1", 
-                "% Var. explained by PC2",  
-                "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", 
-                "Agglom. coef. hierarch. analyte clustering", 
-                "sd(Intensity w/ prob(NA) = 50% for sample)", "sd(Intensity w/ prob(NA) = 90% for sample)"
-)
-
-# selForCorr <- selForCorr[order(match(selForCorr, colnames(data2)))]
-
-corrMethod <- "spearman"
-plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = selForCorr, 
-                      corrMethod = corrMethod, width = 14, height = 14, addStr = paste0("_selectedCols_", corrMethod)) 
-
-
-# c("Data type", "min(% NA in analytes)",
-#   "median(Variance of analytes)",  "% Var. explained by PC1", 
-#   "% Var. explained by PC2",  
-#  "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)", 
-#   )
-#############################################
-
-# margPlot <- ggplot(data, aes(x = corSampleMeanNA, y = corAnalyteMeanNA, colour = get(selectedDataTypeCol))) +
-# geom_point(aes(fill = get(selectedDataTypeCol)),  size = 0.8, alpha = 0.5) +
-#   theme_minimal() +
-#   theme(legend.title=element_blank())
-
-margPlot <- ggplot(data, aes(x = `Corr(Mean vs. % NA) (Samples)`, 
-                             y = `Corr(Mean vs. % NA) (Analytes)`, colour = `Data type`)) +
-  geom_point(aes(fill = `Data type`),  size = 0.8, alpha = 0.5) +
-  theme_minimal() +
-  theme(legend.title=element_blank())
-
-pdf("marginPlot.pdf", width = 12, height = 10)
-ggExtra::ggMarginal(margPlot, groupFill = TRUE, groupColour = TRUE)
-dev.off()
-
-#############################################
-
-plotPCABiplot <- function(df, groups= c(), alpha = 0.5, 
-                          pcaMethod = "nipals",
-                          coordRatio = 0.5, 
-                          facetZoom = TRUE, 
-                          xlimLower = NA, xlimUpper = NA,
-                          ylimLower = NA, ylimUpper = NA,
-                          PCchoices = 1:2,
-                          ellipse = TRUE) {
-  # See https://stackoverflow.com/a/49788251
-  #   # devtools::install_github("vqv/ggbiplot")
   
-  library(ggbiplot)
+  for (var in c("median(Variance of samples)", "median(Variance of analytes)")){
+    # print(var)
+    data2 <- logTransform(df = data2, variable = var, logBase = "log1p")
+  }
   
-  iris_dummy<-df
-  iris_dummy[is.na(iris_dummy)]<-7777 #swap out your NAs with a dummy number so prcomp will run
-  pca.obj <- prcomp(iris_dummy, center=TRUE, scale.=TRUE)
+  write.csv(data2, paste0("data2_", gsub(" ", "_", selectedDataTypeLevel), ".csv"), row.names = FALSE)
+  data2[sapply(data2, is.infinite)] <- NA
   
-  # scale: One of "UV" (unit variance a=a/\sigma_{a}), 
-  # "vector" (vector normalisation b=b/|b|), 
-  # "pareto" (sqrt UV) or "none" 
-  # to indicate which scaling should be used to scale the matrix with aa variables and b samples. 
-  pca.obj2 <- pcaMethods::pca(df, method=pcaMethod, nPcs=4, center=TRUE
-                              , scale = "uv"
+  dput(colnames(data2))
+  
+  
+  naRelatedCols <- c("Corr(Mean vs. % NA) (Samples)", 
+                     "Corr(Mean vs. % NA) (Samples) (p-Value)", 
+                     "Corr(Mean vs. % NA) (Analytes)", 
+                     "Corr(Mean vs. % NA) (Analytes) (p-Value)", 
+                     "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                     "sd(Intensity w/ prob(NA) = 90% for sample)",
+                     "# Samples w/ intensityNAProb50.sd or intensityNAProb90.sd",
+                     "Bimodality of sample correlations"
   )
   
-  pca.obj$x<-pca.obj2@scores 
-  pca.obj$rotation<-pca.obj2@loadings 
-  pca.obj$sdev<-pca.obj2@sDev
-  pca.obj$center<-pca.obj2@center
-  pca.obj$scale<-pca.obj2@scale
+  data2.complete <- data2[,!(colnames(data2) %in% naRelatedCols)]
   
-  P2 <- ggbiplot::ggbiplot(pca.obj,
-                           choices = PCchoices,
-                           obs.scale = 1, 
-                           var.scale=1,
-                           ellipse=ellipse,
-                           circle=F,
-                           varname.size=3,
-                           var.axes=T,
-                           groups=groups, 
-                           alpha=0)  +
-    scale_color_discrete(name = '') +  
-    coord_fixed(ratio = coordRatio)
+  data2.complete <- data2.complete[complete.cases(data2.complete), ]
   
-  if (facetZoom) {
-    P2 <- P2 + ggforce::facet_zoom(xlim = c(xlimLower, xlimUpper), ylim = c(ylimLower, ylimUpper))
+  
+  #############################################
+  
+  data2.long <- reshape2::melt(data2)
+  
+  neworder <- c("Data type", 
+                "log2(# Analytes)", "log2(# Samples)", 
+                "Mean", "Median", "Min", "Max", 
+                "log1p(median(Variance of samples))", "log1p(median(Variance of analytes))", "log2(Variance)",
+                "Kurtosis", "Skewness", "log2(|Skewness|)", "% Distinct values",
+                "% NA",
+                "min(% NA in samples)", "max(% NA in samples)",  
+                "min(% NA in analytes)", "max(% NA in analytes)", 
+                "% Analytes with NAs", "% Samples with NAs", 
+                "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                "sd(Intensity w/ prob(NA) = 90% for sample)",
+                "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)", 
+                "% Var. explained by PC1", "% Var. explained by PC2", 
+                "Agglom. coef. hierarch. analyte clustering",
+                "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+                "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)"
+  )
+  
+  data2.long <- dplyr::arrange(dplyr::mutate(data2.long,
+                                             variable=factor(variable,levels=neworder)), variable)
+  
+  
+  numberOfDatasetsIncluded <- data2.long %>% 
+    na.omit() %>%
+    group_by(`Data type`, variable) %>%  tally() %>%
+    ungroup()
+  colnames(numberOfDatasetsIncluded) <- c("Data type", "variable", "count")
+  write.csv(numberOfDatasetsIncluded, paste0("numberOfDatasetsIncluded_", selectedDataTypeLevel, ".csv"), row.names = FALSE)
+  
+  if (selectedDataTypeLevel == "Data type") {
+    height <- 12
+    width <- 18
   } else {
-    if (!all(is.na(c(xlimLower, xlimUpper))))
-      P2 <- P2 + xlim(c(xlimLower, xlimUpper))
-    
-    if (!all(is.na(c(ylimLower, ylimUpper))))
-      P2 <- P2 + ylim(c(ylimLower, ylimUpper))
+    height <- 22
+    width <- 19
   }
   
+  plotBoxplots(data2.long, fileNameAddition = paste0("_allDataTypes_", gsub(" ", "_", selectedDataTypeLevel)), height = height, width = width)
+  # plotBoxplots(data2.long %>% filter(dataType != "metabolomics_MS"), fileNameAddition = "_metabolomics_MSRemoved")
   
-  P2 <- P2 + theme(legend.direction ='horizontal', 
-                   legend.position = 'bottom')
+  plotBoxplots(data2.long %>% na.omit() %>% dplyr::group_by(variable) %>% dplyr::mutate(value = rank(value)), 
+               fileNameAddition = paste0("_allDataTypes_ranks_", gsub(" ", "_", selectedDataTypeLevel)), height = height, width = width)
   
-  P2$layers <- c(geom_point(aes(colour=groups), cex=1, alpha = alpha), P2$layers)
+  #############################################
   
-  P2
+  # colsForCorr <- setdiff(colnames(data2), "Data type")
+  # corrMethod <- "spearman"
+  # plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = colsForCorr, 
+  #                       corrMethod = corrMethod, addStr = paste0("_allcols_", corrMethod)) 
+  
+  #############################################
+  # Interesting features based on correlation plot of all columns:
+  # "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+  # "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", 
+  # "sd(Intensity w/ prob(NA) = 50% for sample)", "sd(Intensity w/ prob(NA) = 90% for sample)", 
+  # "max(% NA in analytes)", "log2(# Samples)",  "% Distinct values",
+  # "Agglom. coef. hierarch. analyte clustering", "log2(# Analytes)",
+  # "Kurtosis", "Skewness",
+  
+  # One of: "median(Variance of samples)", "log2(Variance)"
+  # One of: "Mean", "Median", "Min", "Max"
+  # One of : "min(% NA in samples)", "max(% NA in samples)", "% NA", "% Analytes with NAs", "% Samples with NAs", 
+  
+  
+  selForCorr <- c("% Distinct values", 
+                  "log2(# Analytes)", "log2(# Samples)", 
+                  "Mean", "log2(Variance)", 
+                  "% NA", "max(% NA in analytes)", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
+                  "Skewness", "log2(|Skewness|)", "Kurtosis", 
+                  "% Var. explained by PC1", 
+                  "% Var. explained by PC2",  
+                  "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", 
+                  "Agglom. coef. hierarch. analyte clustering", 
+                  "sd(Intensity w/ prob(NA) = 50% for sample)", "sd(Intensity w/ prob(NA) = 90% for sample)"
+  )
+  
+  corrMethod <- "spearman"
+  plotPairsPlotForTypes(df = data2, groupColName = "Data type", colsForCorr = selForCorr, 
+                        corrMethod = corrMethod, width = 14, height = 14, addStr = paste0("_selectedCols_", corrMethod, "_", gsub(" ", "_", selectedDataTypeLevel))) 
+  
+  #############################################
+  
+  # margPlot <- ggplot(data, aes(x = corSampleMeanNA, y = corAnalyteMeanNA, colour = get(selectedDataTypeCol))) +
+  # geom_point(aes(fill = get(selectedDataTypeCol)),  size = 0.8, alpha = 0.5) +
+  #   theme_minimal() +
+  #   theme(legend.title=element_blank())
+  
+  margPlot <- ggplot(data, aes(x = `Corr(Mean vs. % NA) (Samples)`, 
+                               y = `Corr(Mean vs. % NA) (Analytes)`, colour = `Data type`)) +
+    geom_point(aes(fill = `Data type`),  size = 0.8, alpha = 0.5) +
+    theme_minimal() +
+    theme(legend.title=element_blank())
+  
+  pdf(paste0("marginPlot_", gsub(" ", "_", selectedDataTypeLevel), ".pdf"), width = 12, height = 10)
+  ggExtra::ggMarginal(margPlot, groupFill = TRUE, groupColour = TRUE)
+  dev.off()
+  
+  #############################################
+  
+  
+  plotPCABiplots(df = data2.complete, groupColName = "Data type", addStr = gsub(" ", "_", selectedDataTypeLevel), pcaMethod = "svd") # "svd" or "nipals"
+  plotPCABiplots(df = data2, groupColName = "Data type", addStr = gsub(" ", "_", selectedDataTypeLevel), pcaMethod = "nipals") # "svd" or "nipals"
+  
+  #####################
+  
+  # dataScUnnormalizedOnly <- data %>% dplyr::filter(`Data type` == "scRNA-seq (unnormalized)")
+  # 
+  # scPipeline.df <- read.csv("scAnalysisPipelines.csv")
+  # meanSc <- data.frame(mean = dataScUnnormalizedOnly$Mean, 
+  #                      nSamples = dataScUnnormalizedOnly$`# Samples`,
+  #                      projectId =  gsub("\\..*", "", dataScUnnormalizedOnly$`Dataset ID`))
+  # 
+  # meanSc <- dplyr::left_join(meanSc, scPipeline.df)
+  # ggplot(meanSc, aes(x=mean, y=log2(nSamples))) + 
+  #   geom_point(aes(color = technology), alpha=0.5, scale = "width")
+  
+  #####################
 }
-
-plotPCABiplots <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals") {
-  
-  pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs2", addStr, ".pdf"), width = 12, height = 10)
-  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-                      groups= df[[groupColName]],
-                      alpha = 0.3,
-                      pcaMethod = pcaMethod,
-                      facetZoom = TRUE,
-                      PCchoices = 1:2,
-                      xlimLower = -4, xlimUpper = 5,
-                      ylimLower = -5, ylimUpper = 8))
-  dev.off()
-  
-  pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs3", addStr, ".pdf"), width = 12, height = 10)
-  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-                      groups= df[[groupColName]],
-                      alpha = 0.3,
-                      pcaMethod = pcaMethod,
-                      facetZoom = TRUE,
-                      PCchoices = c(1, 3),
-                      xlimLower = -5, xlimUpper = 5,
-                      ylimLower = -4, ylimUpper = 8))
-  dev.off()
-  
-  pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC2vs3", addStr, ".pdf"), width = 12, height = 10)
-  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-                      groups= df[[groupColName]],
-                      alpha = 0.3,
-                      pcaMethod = pcaMethod,
-                      facetZoom = TRUE,
-                      PCchoices = c(2, 3),
-                      xlimLower = -5, xlimUpper = 7,
-                      ylimLower = -4, ylimUpper = 8
-  ))
-  dev.off()
-  
-  ## Remove outlier "E-GEOD-152766.aggregated_filtered_counts.mtx"
-  # df <- df[row.names(df) != "E-GEOD-152766.aggregated_filtered_counts.mtx", ]
-  pdf(file = paste0("biplot_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
-  print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-                      groups= df[[groupColName]],
-                      alpha = 0.3,
-                      pcaMethod = pcaMethod,
-                      facetZoom = FALSE))
-  dev.off()
-  
-  pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method=pcaMethod, nPcs=4, center=TRUE
-                         , scale = "uv")
-  write.csv(pca@loadings, paste0("loadings_",  pcaMethod, "_", addStr,".csv"))
-  dat <- merge(pcaMethods::scores(pca), df, by=0)
-  
-  library(GGally)
-  pdf(paste0("ggpairs_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
-  print(GGally::ggpairs(dat, columns = 2:5, ggplot2::aes(colour=get(groupColName)),
-                        lower = list(continuous = wrap("smooth", alpha = 0.3, size = 1), 
-                                     combo = wrap("dot_no_facet", alpha = 0.4)),
-                        upper=list(continuous = wrap("cor", method = "spearman", size = 3)),
-                        mapping=aes(color = get(groupColName),
-                                    fill= get(groupColName), 
-                                    alpha=0.5)) +
-          ggtitle(groupColName) +
-          theme_bw())
-  dev.off()
-  
-  library(plotly)
-  library(htmlwidgets)
-  fig <- plot_ly(dat, x = ~PC1, y = ~PC2, z = ~PC3, 
-                 color = ~as.factor(dat[[groupColName]]), 
-                 type="scatter3d", mode="markers",
-                 #colors = c('#636EFA','#EF553B') , 
-                 marker = list(size = 2)
-                 # , alpha = 0.75
-  ) #%>%
-  # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
-  fig <- fig %>%
-    layout(
-      title = "3D PCA",
-      scene = list(bgcolor = "#e5ecf6"
-      )
-    )
-  
-  htmlwidgets::saveWidget(fig, paste0("plotly_", pcaMethod, "_", addStr,".html"), selfcontained = F, libdir = "lib")
-}
-
-plotPCABiplots(df = data2.complete, groupColName = "Data type", addStr = "", pcaMethod = "svd") # "svd" or "nipals"
-plotPCABiplots(df = data2, groupColName = "Data type", addStr = "", pcaMethod = "nipals") # "svd" or "nipals"
-
-#####################
-
-# dataScUnnormalizedOnly <- data %>% dplyr::filter(`Data type` == "scRNA-seq (unnormalized)")
-# 
-# scPipeline.df <- read.csv("scAnalysisPipelines.csv")
-# meanSc <- data.frame(mean = dataScUnnormalizedOnly$Mean, 
-#                      nSamples = dataScUnnormalizedOnly$`# Samples`,
-#                      projectId =  gsub("\\..*", "", dataScUnnormalizedOnly$`Dataset ID`))
-# 
-# meanSc <- dplyr::left_join(meanSc, scPipeline.df)
-# ggplot(meanSc, aes(x=mean, y=log2(nSamples))) + 
-#   geom_point(aes(color = technology), alpha=0.5, scale = "width")
-
-#####################
 
 session <- sessionInfo()
 sink(paste0("visualizations_sessionInfo.txt"))
