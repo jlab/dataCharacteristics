@@ -511,6 +511,13 @@ write.csv(data, "datasets_results.csv", row.names = FALSE)
 ################################################################################
 ################################################################################
 
+# Remove datasets with negative values --> potentially due to log already taken
+data <- data[data$nNegativeNumbers == 0,]
+
+# Remove datasets with 
+data <- data[data$medianAnalyteVariance > 0,]
+data <- data[data$medianSampleVariance > 0,]
+
 # # data <- dataset %>% dplyr::select(-nNegativeNumbers)
 # # Get %NA per column grouped by data type
 # naPrctPerCol <- data %>%
@@ -689,10 +696,10 @@ write.csv(data.frame(table(data[, "Data type subgroups" ])), "numberOfDatasets_s
 
 allDataTypeLevels <- c("Data type", "Data type subgroups")
 # selectedDataTypeLevel <- "Data type subgroups"
-
+data.copy <- data
 for (selectedDataTypeLevel in allDataTypeLevels) {
   
-  data <- data %>% select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
+  data <- data.copy %>% select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
   data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5) %>% ungroup
   
   ################################################################################
@@ -748,17 +755,10 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   
   toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)
   # "# Samples"  "# Analytes" "Variance"  
-  
-  
-  
+
   for (var in toBeLog2Transformed){
     # print(var)
     data2 <- logTransform(df = data2, variable = var, logBase = "log2")
-  }
-  
-  for (var in c("median(Variance of samples)", "median(Variance of analytes)")){
-    # print(var)
-    data2 <- logTransform(df = data2, variable = var, logBase = "log1p")
   }
   
   write.csv(data2, paste0("data2_", gsub(" ", "_", selectedDataTypeLevel), ".csv"), row.names = FALSE)
@@ -789,7 +789,7 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   neworder <- c("Data type", 
                 "log2(# Analytes)", "log2(# Samples)", 
                 "Mean", "Median", "Min", "Max", 
-                "log1p(median(Variance of samples))", "log1p(median(Variance of analytes))", "log2(Variance)",
+                "median(Variance of samples)", "median(Variance of analytes)", "log2(Variance)",
                 "Kurtosis", "Skewness", "log2(|Skewness|)", "% Distinct values",
                 "% NA",
                 "min(% NA in samples)", "max(% NA in samples)",  
