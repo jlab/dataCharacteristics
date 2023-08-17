@@ -789,7 +789,7 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   neworder <- c("Data type", 
                 "log2(# Analytes)", "log2(# Samples)", 
                 "Mean", "Median", "Min", "Max", 
-                "log2(median(Variance of samples))", "log2(median(Variance of analytes))", "log2(Variance)",
+                "log2(Variance)", "log2(median(Variance of samples))", "log2(median(Variance of analytes))",
                 "Kurtosis", "Skewness", "log2(|Skewness|)", "% Distinct values",
                 "% NA",
                 "min(% NA in samples)", "max(% NA in samples)",  
