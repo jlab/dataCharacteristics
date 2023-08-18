@@ -622,7 +622,6 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
                 "Metabolomics (GC-MS)", "Metabolomics (LC-MS)", "Metabolomics (DI-MS)", "Metabolomics (FIA-MS)", 
                 "Metabolomics (CE-MS)", "Metabolomics (Other ionization-MS)", "Metabolomics (Undefined-MS)", 
                 "Microarray (Affymetrix)", "Microarray (Illumina)", "Microarray (Agilent)", 
-                "Microbiome (16S)", "Microbiome (WGS)", 
                 "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)", "Proteomics (LFQ, Expression Atlas)", 
                 
                 "Proteomics (iBAQ, PRIDE, Agilent)", "Proteomics (iBAQ, PRIDE, Thermo)", "Proteomics (iBAQ, PRIDE, Bruker)", 
@@ -634,13 +633,17 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
                 "Proteomics (LFQ, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Thermo)", "Proteomics (LFQ, PRIDE, Bruker)", 
                 "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (LFQ, PRIDE, Undefined)",
                 
+                "scProteomics",
+                
                 "RNA-seq (raw)", 
                 "RNA-seq (FPKM)", 
                 "RNA-seq (TPM)", 
                 
                 "scRNA-seq (SMART-like, unnormalized)", "scRNA-seq (Droplet-based, unnormalized)", 
-                "scRNA-seq (SMART-like, normalized)", "scRNA-seq (Droplet-based, normalized)", 
-                "scProteomics")
+                "scRNA-seq (SMART-like, normalized)", "scRNA-seq (Droplet-based, normalized)",
+                
+                "Microbiome (16S)", "Microbiome (WGS)"
+                )
   }
   
   renameDataTypeTable <- data.frame(OldDataTypeNames = OldDataTypeNames,
@@ -884,10 +887,36 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   dev.off()
   
   #############################################
+  # For data type subgroups: separate plots for 
+  # - Metabolomics
+  # - Proteomics
+  # - Microarray, RNA-seq
+  # - scRNA−seq, Microbiome, scProteomics
   
-  
-  plotPCABiplots(df = data2.complete, groupColName = "Data type", addStr = gsub(" ", "_", selectedDataTypeLevel), pcaMethod = "svd") # "svd" or "nipals"
-  plotPCABiplots(df = data2, groupColName = "Data type", addStr = gsub(" ", "_", selectedDataTypeLevel), pcaMethod = "nipals") # "svd" or "nipals"
+  if (selectedDataTypeLevel == "Data type") {
+    plotPCABiplots(df = data2.complete, groupColName = "Data type", addStr = gsub(" ", "_", selectedDataTypeLevel), pcaMethod = "svd") # "svd" or "nipals"
+    plotPCABiplots(df = data2, groupColName = "Data type", addStr = gsub(" ", "_", selectedDataTypeLevel), pcaMethod = "nipals") # "svd" or "nipals"
+  } # else if (selectedDataTypeLevel == "Data type subgroups") {
+  #   for (subgroup in list("Metabolomics", "Proteomics", c("Microarray", "RNA-seq"),
+  #                          c("scRNA−seq", "Microbiome", "scProteomics"))) {
+  #     
+  #     df.complete <- df <- NULL
+  #     df.complete <- data2.complete[grepl(paste0("^", subgroup, collapse = "|"), data2.complete$`Data type`),]
+  #     df.complete <- df.complete[, sapply(df.complete, function(x) length(unique(x)) > 1)]
+  # 
+  #     df <- data2[grepl(paste0("^", subgroup, collapse = "|"), data2$`Data type`),]
+  #     df <- df[, sapply(df, function(x) length(unique(x)) > 1)]
+  #     
+  #     plotPCABiplots(df =  df.complete, 
+  #                    groupColName = "Data type", 
+  #                    addStr =  paste0(gsub(" ", "_", selectedDataTypeLevel), "_", paste0(subgroup, collapse = "_")), 
+  #                    pcaMethod = "svd") # "svd" or "nipals"
+  #     plotPCABiplots(df = df, 
+  #                    groupColName = "Data type", 
+  #                    addStr = paste0(gsub(" ", "_", selectedDataTypeLevel), "_", paste0(subgroup, collapse = "_")),
+  #                    pcaMethod = "nipals") # "svd" or "nipals"
+  #   }
+  # } 
   
   #####################
   
