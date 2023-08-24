@@ -191,7 +191,7 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
   
   
   P2 <- P2 + theme(legend.direction ='horizontal', 
-                   legend.position = 'bottom')
+                    legend.position = 'bottom')
   
   P2$layers <- c(geom_point(aes(colour=groups), cex=1, alpha = alpha), P2$layers)
   
@@ -241,6 +241,7 @@ plotPCABiplots <- function(df, groupColName = "", addStr = "", pcaMethod = "nipa
                       groups= df[[groupColName]],
                       alpha = 0.3,
                       pcaMethod = pcaMethod,
+                      coordRatio = 1/3,
                       facetZoom = FALSE))
   dev.off()
   
@@ -883,7 +884,7 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
     theme(legend.title=element_blank())
   
   pdf(paste0("marginPlot_", gsub(" ", "_", selectedDataTypeLevel), ".pdf"), width = 12, height = 10)
-  ggExtra::ggMarginal(margPlot, groupFill = TRUE, groupColour = TRUE)
+  print(ggExtra::ggMarginal(margPlot, groupFill = TRUE, groupColour = TRUE))
   dev.off()
   
   #############################################
