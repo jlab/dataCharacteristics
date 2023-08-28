@@ -622,7 +622,7 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
     levels <- c("Metabolomics (NMR)", 
                 "Metabolomics (GC-MS)", "Metabolomics (LC-MS)", "Metabolomics (DI-MS)", "Metabolomics (FIA-MS)", 
                 "Metabolomics (CE-MS)", "Metabolomics (Other ionization-MS)", "Metabolomics (Undefined-MS)", 
-                "Microarray (Affymetrix)", "Microarray (Illumina)", "Microarray (Agilent)", 
+                
                 "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)", "Proteomics (LFQ, Expression Atlas)", 
                 
                 "Proteomics (iBAQ, PRIDE, Agilent)", "Proteomics (iBAQ, PRIDE, Thermo)", "Proteomics (iBAQ, PRIDE, Bruker)", 
@@ -635,6 +635,8 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
                 "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (LFQ, PRIDE, Undefined)",
                 
                 "scProteomics",
+                
+                "Microarray (Affymetrix)", "Microarray (Illumina)", "Microarray (Agilent)", 
                 
                 "RNA-seq (raw)", 
                 "RNA-seq (FPKM)", 
