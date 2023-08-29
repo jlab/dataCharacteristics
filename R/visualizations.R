@@ -706,6 +706,12 @@ data.copy <- data
 for (selectedDataTypeLevel in allDataTypeLevels) {
   
   data <- data.copy %>% select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
+  data <- data[!(data$`Data type` %in% c("Metabolomics (Undefined-MS)",
+                                         "Metabolomics (Other ionization-MS)",
+                                         "Proteomics (iBAQ, PRIDE, Undefined)", 
+                                         "Proteomics (Intensity, PRIDE, Undefined)", 
+                                         "Proteomics (LFQ, PRIDE, Undefined)")),]
+  
   data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5) %>% ungroup
   
   ################################################################################
