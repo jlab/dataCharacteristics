@@ -1,3 +1,5 @@
+library(shiny)
+
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 ##########################################################################################
@@ -229,14 +231,14 @@ getCharacteristicsHelper <- function(mtx){
     linearCoefPoly2Row <- coefs[["linearCoef"]]
     quadraticCoefPoly2Row <- coefs[["quadraticCoef"]]
   })
-
+  
   # Coef.hclust (features)
   try({
     coefHclustRowsRes <- get_coefHclustRowsWithFewestNAs(mtx, naToZero = TRUE)
     coefHclustRows <- coefHclustRowsRes$res
     # coefHclustRowsSeed <- coefHclustRowsRes$seed
   })
-
+  
   try({
     x5090.sds <- calculateIntensityNAProbability5090(mtx)
     intensityNAProb50.sd <- x5090.sds[["IntensityNAp50"]]
@@ -315,31 +317,31 @@ getNaFeatures <- function(mtx) {
 
 
 getDataCharacteristics <- function(mtx) {
-
-    mtx[mtx == 0] <- NA
-    mtx[mtx == Inf] <- NA
-    mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
-    
-    nSamples <- ncol(mtx)
-    nAnalytes <- nrow(mtx)
-
-    nNegativeNumbers <- sum(mtx < 0, na.rm = TRUE)
-     mtx <- log2(mtx)
-    mtx[mtx == "NaN"] <- NA
-    
-    nDistinctValues <- length(unique(c(mtx[!is.na(mtx)])))
-    naFeatures <- getNaFeatures(mtx)
-    
-    characts <- getCharacteristicsHelper(mtx)
-    
-    charact.log <- c(naFeatures, characts, nDistinctValues = nDistinctValues, nNegativeNumbers = nNegativeNumbers)
-    
-    res <- c(nSamples = nSamples, 
-                    nAnalytes = nAnalytes,
-                    # charact.noLog, 
-                    charact.log)
-    res
-
+  
+  mtx[mtx == 0] <- NA
+  mtx[mtx == Inf] <- NA
+  mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
+  
+  nSamples <- ncol(mtx)
+  nAnalytes <- nrow(mtx)
+  
+  nNegativeNumbers <- sum(mtx < 0, na.rm = TRUE)
+  mtx <- log2(mtx)
+  mtx[mtx == "NaN"] <- NA
+  
+  nDistinctValues <- length(unique(c(mtx[!is.na(mtx)])))
+  naFeatures <- getNaFeatures(mtx)
+  
+  characts <- getCharacteristicsHelper(mtx)
+  
+  charact.log <- c(naFeatures, characts, nDistinctValues = nDistinctValues, nNegativeNumbers = nNegativeNumbers)
+  
+  res <- c(nSamples = nSamples, 
+           nAnalytes = nAnalytes,
+           # charact.noLog, 
+           charact.log)
+  res
+  
 }
 
 
@@ -351,13 +353,13 @@ logTransform <- function(df, variable, logBase = c("log2", "log1p")){
 
 
 plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5, 
-                          pcaMethod = "nipals",
-                          coordRatio = 0.5, 
-                          facetZoom = TRUE, 
-                          xlimLower = NA, xlimUpper = NA,
-                          ylimLower = NA, ylimUpper = NA,
-                          PCchoices = 1:2,
-                          ellipse = TRUE) {
+                                    pcaMethod = "nipals",
+                                    coordRatio = 0.5, 
+                                    facetZoom = TRUE, 
+                                    xlimLower = NA, xlimUpper = NA,
+                                    ylimLower = NA, ylimUpper = NA,
+                                    PCchoices = 1:2,
+                                    ellipse = TRUE) {
   # See https://stackoverflow.com/a/49788251
   #   # devtools::install_github("vqv/ggbiplot")
   
@@ -416,97 +418,21 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
   
   P2 <- P2 + 
     scale_color_manual(name = '',
-      values = my_colors,
-      limits = setdiff(unique(groups), "newDataset")
+                       values = my_colors,
+                       limits = setdiff(unique(groups), "newDataset")
     ) +
     geom_point(aes(x=cond[PCchoices[1]], y=cond[PCchoices[2]]), col="red", size=3) 
   
   P2
 }
 
-plotPCABiplotsNewDataset <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals") {
-  
-  # pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs2_", addStr, ".pdf"), width = 12, height = 10)
-  # print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-  #                     groups= df[[groupColName]],
-  #                     alpha = 0.3,
-  #                     pcaMethod = pcaMethod,
-  #                     facetZoom = TRUE,
-  #                     PCchoices = 1:2,
-  #                     xlimLower = -4, xlimUpper = 5,
-  #                     ylimLower = -5, ylimUpper = 8))
-  # dev.off()
-  # 
-  # pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC1vs3_", addStr, ".pdf"), width = 12, height = 10)
-  # print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-  #                     groups= df[[groupColName]],
-  #                     alpha = 0.3,
-  #                     pcaMethod = pcaMethod,
-  #                     facetZoom = TRUE,
-  #                     PCchoices = c(1, 3),
-  #                     xlimLower = -5, xlimUpper = 5,
-  #                     ylimLower = -4, ylimUpper = 8))
-  # dev.off()
-  # 
-  # pdf(file = paste0("biplot_", pcaMethod, "_facetZoom_PC2vs3_", addStr, ".pdf"), width = 12, height = 10)
-  # print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
-  #                     groups= df[[groupColName]],
-  #                     alpha = 0.3,
-  #                     pcaMethod = pcaMethod,
-  #                     facetZoom = TRUE,
-  #                     PCchoices = c(2, 3),
-  #                     xlimLower = -5, xlimUpper = 7,
-  #                     ylimLower = -4, ylimUpper = 8
-  # ))
-  # dev.off()
-  
-  ## Remove outlier "E-GEOD-152766.aggregated_filtered_counts.mtx"
-  # df <- df[row.names(df) != "E-GEOD-152766.aggregated_filtered_counts.mtx", ]
-  pdf(file = paste0("biplot_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
-  print(plotPCABiplotNewDataset(df = df %>% dplyr::select(-!!groupColName), 
-                      groups= df[[groupColName]],
-                      alpha = 0.3,
-                      pcaMethod = pcaMethod,
-                      coordRatio = 1/3,
-                      facetZoom = FALSE))
-  dev.off()
-  
-  # pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method=pcaMethod, nPcs=4, center=TRUE
-  #                        , scale = "uv")
-  # write.csv(pca@loadings, paste0("loadings_",  pcaMethod, "_", addStr,".csv"))
-  #dat <- merge(pcaMethods::scores(pca), df, by=0)
-  # 
-  # # library(GGally)
-  # # pdf(paste0("ggpairs_", pcaMethod, "_", addStr, ".pdf"), width = 12, height = 10)
-  # # print(GGally::ggpairs(dat, columns = 2:5, ggplot2::aes(colour=get(groupColName)),
-  # #                       lower = list(continuous = wrap("smooth", alpha = 0.3, size = 1), 
-  # #                                    combo = wrap("dot_no_facet", alpha = 0.4)),
-  # #                       upper=list(continuous = wrap("cor", method = "spearman", size = 3)),
-  # #                       mapping=aes(color = get(groupColName),
-  # #                                   fill= get(groupColName), 
-  # #                                   alpha=0.5)) +
-  # #         ggtitle(groupColName) +
-  # #         theme_bw())
-  # # dev.off()
-  # 
-  # library(plotly)
-  # library(htmlwidgets)
-  # fig <- plot_ly(dat, x = ~PC1, y = ~PC2, z = ~PC3, 
-  #                color = ~as.factor(dat[[groupColName]]), 
-  #                type="scatter3d", mode="markers",
-  #                #colors = c('#636EFA','#EF553B') , 
-  #                marker = list(size = 2)
-  #                # , alpha = 0.75
-  # ) #%>%
-  # # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
-  # fig <- fig %>%
-  #   layout(
-  #     title = "3D PCA",
-  #     scene = list(bgcolor = "#e5ecf6"
-  #     )
-  #   )
-  # 
-  # htmlwidgets::saveWidget(fig, paste0("plotly_", pcaMethod, "_", addStr,".html"), selfcontained = F, libdir = "lib")
+getPCABiplotsNewDataset <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals") {
+  plotPCABiplotNewDataset(df = df %>% dplyr::select(-!!groupColName), 
+                                groups= df[[groupColName]],
+                                alpha = 0.3,
+                                pcaMethod = pcaMethod,
+                                coordRatio = 1/3,
+                                facetZoom = FALSE)
 }
 
 integrateNewDataset <- function(mtx) {
@@ -676,103 +602,142 @@ getTopBoxplotsWithNewDataset <- function(pca, data2, top3) {
 }
 ################################################################################
 
-mtx <- readRDS("diaWorkflowResults_allDilutions.rds")
-mtx <- 2^as.matrix(mtx[["DIANN_DIANN_AI_GPF"]])
-# write.csv(mtx, file = "DIANN_DIANN_AI_GPF_example.csv")
-
-# if (nrow(mtx) > 9 & ncol(mtx) > 4) {}
-mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
-data.allDatasets <- integrateNewDataset(mtx)
-################################################################################
-
-
-allDataTypeLevels <- c("Data type", "Data type subgroups")
-# selectedDataTypeLevel <- "Data type subgroups"
-data.copy <- data.allDatasets
-for (selectedDataTypeLevel in allDataTypeLevels) {
+# Define UI for data upload app ----
+ui <- fluidPage(
   
-  data <- data.copy %>% dplyr::select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
-  data <- data[!(data$`Data type` %in% c("Metabolomics (Undefined-MS)",
-                                         "Metabolomics (Other ionization-MS)",
-                                         "Proteomics (iBAQ, PRIDE, Undefined)", 
-                                         "Proteomics (Intensity, PRIDE, Undefined)", 
-                                         "Proteomics (LFQ, PRIDE, Undefined)")),]
+  # App title ----
+  titlePanel("Uploading Files"),
   
-  data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5 | `Data type` == "newDataset") %>% ungroup
-  
-  ################################################################################
-  boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
-                                  "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
-                                  "% NA", "% Analytes with NAs", "% Samples with NAs", "Mean", 
-                                  "Median", "Min", "Max", "median(Variance of samples)", "median(Variance of analytes)", 
-                                  "Variance", "Kurtosis", "Skewness", "|Skewness|", "% Var. explained by PC1", 
-                                  "% Var. explained by PC2", "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
-                                  "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", "Agglom. coef. hierarch. analyte clustering", 
-                                  "% Distinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
-                                  "sd(Intensity w/ prob(NA) = 50% for sample)", 
-                                  "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
-  
-  data2 <- data[, c("Data type", 
-                    boxplotCols)]
-  
-  # To be log2-transformed:
-  toBeLog2Transformed <- c("# Samples", "# Analytes", 
-                           "min(% NA in analytes)", "max(% NA in analytes)", 
-                           "% Analytes with NAs", "% Samples with NAs",
-                           "median(Variance of samples)", "median(Variance of analytes)", 
-                           "Variance", "Kurtosis", "|Skewness|", "Skewness",
-                           "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
-                           "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)",
-                           "sd(Intensity w/ prob(NA) = 50% for sample)", 
-                           "sd(Intensity w/ prob(NA) = 90% for sample)")
-  
-  colsWithNegativeNumbers <- colnames(data2[, sapply(data2, FUN = function(x) any(x <= 0, na.rm = TRUE))])
-  
-  toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)  
-  
-  for (var in toBeLog2Transformed){
-    # print(var)
-    data2 <- logTransform(df = data2, variable = var, logBase = "log2")
-  }
-  
-  #write.csv(data2, paste0("data2_", gsub(" ", "_", selectedDataTypeLevel), ".csv"), row.names = FALSE)
-  data2[sapply(data2, is.infinite)] <- NA
-  
-
-  
-  naRelatedCols <- c("Corr(Mean vs. % NA) (Samples)", 
-                     "Corr(Mean vs. % NA) (Samples) (p-Value)", 
-                     "Corr(Mean vs. % NA) (Analytes)", 
-                     "Corr(Mean vs. % NA) (Analytes) (p-Value)", 
-                     "sd(Intensity w/ prob(NA) = 50% for sample)", 
-                     "sd(Intensity w/ prob(NA) = 90% for sample)",
-                     "# Samples w/ intensityNAProb50.sd or intensityNAProb90.sd",
-                     "Bimodality of sample correlations"
+  # Sidebar layout with input and output definitions ----
+  sidebarLayout(
+    
+    # Sidebar panel for inputs ----
+    sidebarPanel(
+      
+      # Input: Select a file ----
+      fileInput("file1", "Choose CSV File",
+                multiple = TRUE,
+                accept = c("text/csv",
+                           "text/comma-separated-values,text/plain",
+                           ".csv")),
+      
+      # Horizontal line ----
+      tags$hr(),
+      
+      # Input: Checkbox if file has header ----
+      checkboxInput("header", "Header", TRUE),
+      
+      # Input: Select separator ----
+      radioButtons("sep", "Separator",
+                   choices = c(Comma = ",",
+                               Semicolon = ";",
+                               Tab = "\t"),
+                   selected = ","),
+      
+      # Input: Select quotes ----
+      radioButtons("quote", "Quote",
+                   choices = c(None = "",
+                               "Double Quote" = '"',
+                               "Single Quote" = "'"),
+                   selected = '"'),
+      
+      # Horizontal line ----
+      tags$hr(),
+      
+      # Input: Select number of rows to display ----
+      radioButtons("disp", "Display",
+                   choices = c(Head = "head",
+                               All = "all"),
+                   selected = "head")
+      
+    ),
+    
+    # Main panel for displaying outputs ----
+    mainPanel(
+      
+      # Output: Data file ----
+      tableOutput("contents")
+      
+    )
+    
   )
-  
-  data2.complete <- data2[,!(colnames(data2) %in% naRelatedCols)]
-  data2.complete <- data2.complete[complete.cases(data2.complete), ]
-  
-  
+)
 
-
-  # One of: "median(Variance of samples)", "log2(Variance)"
-  # One of: "Mean", "Median", "Min", "Max"
-  # One of : "min(% NA in samples)", "max(% NA in samples)", "% NA", "% Analytes with NAs", "% Samples with NAs", 
-  
-  
-
-
-  
-  if (selectedDataTypeLevel == "Data type") {
-    # plotPCABiplotsNewDataset(df = data2.complete, groupColName = "Data type", addStr = paste0(gsub(" ", "_", selectedDataTypeLevel), "_newDataset"), pcaMethod = "svd") # "svd" or "nipals"
-    # plotPCABiplotsNewDataset(df = data2, groupColName = "Data type", addStr = paste0(gsub(" ", "_", selectedDataTypeLevel), "_newDataset"), pcaMethod = "nipals") # "svd" or "nipals"
+# Define server logic to read selected file ----
+server <- function(input, output) {
+  options(shiny.maxRequestSize=300*1024^2)
+  output$contents <- renderTable({
+    
+    # input$file1 will be NULL initially. After the user selects
+    # and uploads a file, head of that data file by default,
+    # or all rows if selected, will be shown.
+    
+    req(input$file1)
+    
+    # Example file: "DIANN_DIANN_AI_GPF_example.csv"
+    mtx <- read.csv(input$file1$datapath,
+                   header = input$header,
+                   sep = input$sep,
+                   quote = input$quote,
+                   check.names = FALSE)
+    
+    mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
+    data.allDatasets <- integrateNewDataset(mtx)
+    
+    selectedDataTypeLevel <- "Data type"
+    data.copy <- data.allDatasets
+    
+    data <- data.copy %>% dplyr::select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
+    data <- data[!(data$`Data type` %in% c("Metabolomics (Undefined-MS)",
+                                           "Metabolomics (Other ionization-MS)",
+                                           "Proteomics (iBAQ, PRIDE, Undefined)", 
+                                           "Proteomics (Intensity, PRIDE, Undefined)", 
+                                           "Proteomics (LFQ, PRIDE, Undefined)")),]
+    
+    data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5 | `Data type` == "newDataset") %>% ungroup
+    
+    ################################################################################
+    boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
+                                    "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
+                                    "% NA", "% Analytes with NAs", "% Samples with NAs", "Mean", 
+                                    "Median", "Min", "Max", "median(Variance of samples)", "median(Variance of analytes)", 
+                                    "Variance", "Kurtosis", "Skewness", "|Skewness|", "% Var. explained by PC1", 
+                                    "% Var. explained by PC2", "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+                                    "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", "Agglom. coef. hierarch. analyte clustering", 
+                                    "% Distinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
+                                    "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                                    "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
+    
+    data2 <- data[, c("Data type", 
+                      boxplotCols)]
+    
+    # To be log2-transformed:
+    toBeLog2Transformed <- c("# Samples", "# Analytes", 
+                             "min(% NA in analytes)", "max(% NA in analytes)", 
+                             "% Analytes with NAs", "% Samples with NAs",
+                             "median(Variance of samples)", "median(Variance of analytes)", 
+                             "Variance", "Kurtosis", "|Skewness|", "Skewness",
+                             "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+                             "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)",
+                             "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                             "sd(Intensity w/ prob(NA) = 90% for sample)")
+    
+    colsWithNegativeNumbers <- colnames(data2[, sapply(data2, FUN = function(x) any(x <= 0, na.rm = TRUE))])
+    
+    toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)  
+    
+    for (var in toBeLog2Transformed){
+      data2 <- logTransform(df = data2, variable = var, logBase = "log2")
+    }
+    
+    data2[sapply(data2, is.infinite)] <- NA
+    
     
     df <- data2
     groupColName <- "Data type"
     pcaMethod <- "nipals"
     
-    plotPCABiplotNewDataset(df = df %>% dplyr::select(-!!groupColName), 
+    gg.biplot <- getPCABiplotsNewDataset(df = df %>% dplyr::select(-!!groupColName), 
                             groups= df[[groupColName]],
                             alpha = 0.3,
                             pcaMethod = pcaMethod,
@@ -781,47 +746,22 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
     
     groups <- df[[groupColName]]
     
-    pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method=pcaMethod, nPcs=4, center=TRUE
-                           , scale = "uv")
-    
     dataTypes <- setdiff(unique(df$`Data type`), "newDataset")
     densVals <- getPCAGroupProbabilities(pca, dataTypes, groups)
     
     top3 <- names(densVals[1:3])
     gg.boxplots <- getTopBoxplotsWithNewDataset(pca, data2, top3)
     
-
-  } 
-  
-  
-  # selForCorr <- c("% Distinct values", 
-  #                 "log2(# Analytes)", "log2(# Samples)", 
-  #                 "Mean", "log2(Variance)", 
-  #                 "% NA", "max(% NA in analytes)", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
-  #                 "Skewness", "log2(|Skewness|)", "Kurtosis", 
-  #                 "% Var. explained by PC1", 
-  #                 "% Var. explained by PC2",  
-  #                 "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", 
-  #                 "Agglom. coef. hierarch. analyte clustering", 
-  #                 "sd(Intensity w/ prob(NA) = 50% for sample)", "sd(Intensity w/ prob(NA) = 90% for sample)"
-  # )
-  # 
-  # data3 <- data2[, c("Data type", selForCorr)]
-  # 
-  # data3$`Data type` <- as.factor(data3$`Data type`)
-  # library("partykit")
-  # ct <- ctree(`Data type` ~ ., data = data3 %>% filter(`Data type` != "newDataset") %>% select("Data type", "% Distinct values", 
-  #                                                                                              "log2(# Analytes)", "log2(# Samples)", 
-  #                                                                                              "Mean", "log2(Variance)", 
-  #                                                                                              "% NA"),
-  #             control = ctree_control(alpha=0.0000000000000001))
-  # plot(ct, tp_args = list(text = TRUE))
+    
+    if(input$disp == "head") {
+      return(head(mtx))
+    }
+    else {
+      return(mtx)
+    }
+    
+  })
   
 }
-
-################################################################################
-################################################################################
-session <- sessionInfo()
-sink(paste0("newDataset_getDataCharacteristics_sessionInfo_ ", dataType, ".txt"))
-print(session)
-sink()
+# Run the app ----
+shinyApp(ui, server)
