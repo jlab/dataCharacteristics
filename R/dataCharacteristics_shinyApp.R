@@ -19,6 +19,12 @@ library(biglm)
 library(reshape2)
 library(speedglm)
 
+library(gridExtra)
+library(shinydashboardPlus)
+
+library(shinycssloaders)
+options(spinner.color="#0275D8", spinner.color.background="#ffffff", spinner.size=2)
+
 `%notin%` <- Negate(`%in%`)
 
 removeEmptyRowsAndColumns <- function(mtx, zerosToNA = FALSE){
@@ -600,13 +606,199 @@ getTopBoxplotsWithNewDataset <- function(pca, data2, top3) {
           axis.title = element_blank()) +     
     guides(fill = guide_legend(reverse = TRUE))
 }
+
+generatePlots <- function(input, output) {
+  
+  # input$file1 will be NULL initially. After the user selects
+  # and uploads a file, head of that data file by default,
+  # or all rows if selected, will be shown.
+  
+  req(input$file1)
+  
+  # Example file: "DIANN_DIANN_AI_GPF_example.csv"
+  mtx <- read.csv(input$file1$datapath,
+                  header = input$header,
+                  sep = input$sep,
+                  quote = input$quote,
+                  check.names = FALSE)
+  
+  
+  if (input$firstColumnRownames) mtx <- mtx[, 2:ncol(mtx)]
+  
+  mtx <- as.matrix(mtx)
+  mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
+  
+  data.allDatasets <- integrateNewDataset(mtx)
+  
+  allDataTypeLevels <- c("Data type", "Data type subgroups")
+  selectedDataTypeLevel <- "Data type"
+  data.copy <- data.allDatasets
+  
+  data <- data.copy %>% dplyr::select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
+  data <- data[!(data$`Data type` %in% c("Metabolomics (Undefined-MS)",
+                                         "Metabolomics (Other ionization-MS)",
+                                         "Proteomics (iBAQ, PRIDE, Undefined)", 
+                                         "Proteomics (Intensity, PRIDE, Undefined)", 
+                                         "Proteomics (LFQ, PRIDE, Undefined)")),]
+  
+  data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5 | `Data type` == "newDataset") %>% ungroup
+  
+  ################################################################################
+  boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
+                                  "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
+                                  "% NA", "% Analytes with NAs", "% Samples with NAs", "Mean", 
+                                  "Median", "Min", "Max", "median(Variance of samples)", "median(Variance of analytes)", 
+                                  "Variance", "Kurtosis", "Skewness", "|Skewness|", "% Var. explained by PC1", 
+                                  "% Var. explained by PC2", "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+                                  "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", "Agglom. coef. hierarch. analyte clustering", 
+                                  "% Distinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
+                                  "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                                  "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
+  
+  data2 <- data[, c("Data type", 
+                    boxplotCols)]
+  
+  # To be log2-transformed:
+  toBeLog2Transformed <- c("# Samples", "# Analytes", 
+                           "min(% NA in analytes)", "max(% NA in analytes)", 
+                           "% Analytes with NAs", "% Samples with NAs",
+                           "median(Variance of samples)", "median(Variance of analytes)", 
+                           "Variance", "Kurtosis", "|Skewness|", "Skewness",
+                           "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+                           "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)",
+                           "sd(Intensity w/ prob(NA) = 50% for sample)", 
+                           "sd(Intensity w/ prob(NA) = 90% for sample)")
+  
+  colsWithNegativeNumbers <- colnames(data2[, sapply(data2, FUN = function(x) any(x <= 0, na.rm = TRUE))])
+  
+  toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)  
+  
+  for (var in toBeLog2Transformed){
+    data2 <- logTransform(df = data2, variable = var, logBase = "log2")
+  }
+  
+  data2[sapply(data2, is.infinite)] <- NA
+  
+  
+  df <- data2
+  groupColName <- "Data type"
+  pcaMethod <- "nipals"
+  
+  gg.biplot <- getPCABiplotsNewDataset(df = df, 
+                                       groupColName = groupColName)
+  
+  selectedDataType <- input$omicsTypes # "Proteomics (LFQ, PRIDE)"
+  
+  boxplot.df <- df %>% filter(`Data type` == !!selectedDataType)
+  
+  
+  boxplot.df.long <- reshape2::melt(boxplot.df)
+  lev <- c("log2(# Analytes)", "log2(# Samples)", 
+           "Mean", "Median", "Min", "Max", 
+           "log2(Variance)", "log2(median(Variance of samples))", "log2(median(Variance of analytes))",
+           "Kurtosis", "Skewness", "log2(|Skewness|)", "% Distinct values",
+           "% NA",
+           "min(% NA in samples)", "max(% NA in samples)",  
+           "min(% NA in analytes)", "max(% NA in analytes)", 
+           "% Analytes with NAs", "% Samples with NAs", 
+           "sd(Intensity w/ prob(NA) = 50% for sample)", 
+           "sd(Intensity w/ prob(NA) = 90% for sample)",
+           "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)", 
+           "% Var. explained by PC1", "% Var. explained by PC2", 
+           "Agglom. coef. hierarch. analyte clustering",
+           "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
+           "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)"
+  )
+  
+  
+  newDatasetValues <- df %>% filter(`Data type` == "newDataset") %>% t() %>% as.data.frame()
+  newDatasetValues <- tibble::rownames_to_column(newDatasetValues, "variable") %>% 
+    filter(variable != "Data type")
+  colnames(newDatasetValues) <- c("variable", "value")
+  newDatasetValues$value <- as.numeric(newDatasetValues$value)
+  
+  # library(Rmisc)
+  # ci.df <- data.frame(t(sapply(boxplot.df[, 2:ncol(boxplot.df)],  
+  #          function(x) Rmisc::CI(x[!is.na(x)], ci = 0.95) )))
+  
+  quantile.df <- data.frame(t(sapply(boxplot.df[, 2:ncol(boxplot.df)],  
+                                     function(x) quantile(x[!is.na(x)]) )))
+  quantile.df$variable <- row.names(quantile.df)
+  newDatasetValues <- dplyr::left_join(newDatasetValues, quantile.df, by = "variable")
+  newDatasetValues$included <- ifelse(
+    (newDatasetValues$value >= newDatasetValues$X25.) & 
+      (newDatasetValues$value <= newDatasetValues$X75.), 'green', 'red')
+  
+  
+  print("Plotting")
+  # pdf("blub.pdf", height = 10, width = 10)
+  gg.boxplot <- ggplot(boxplot.df.long, aes(x = value, y = factor(1))) +
+        geom_violin(alpha=0.5) +
+        geom_boxplot(width=0.5, alpha=0.25, outlier.size=0.5) +
+      geom_rect(data = newDatasetValues, aes(fill = factor(included, levels = c('red', 'green'))), xmin = -Inf, xmax = Inf,
+                 ymin = -Inf, ymax = Inf, alpha = 0.3) +
+  geom_vline(data=newDatasetValues, aes(xintercept=as.numeric(value)), colour = 'blue') +
+  # geom_hline(aes(yintercept = value), newDatasetValues, colour = 'blue') +
+  facet_wrap(. ~ factor(variable, levels=lev), ncol = 4, scales = "free_x") +
+  ggplot2::theme_bw() +
+  theme(axis.title = element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          legend.position = "none")
+  
+  
+  # groups <- df[[groupColName]]
+  # 
+  # dataTypes <- setdiff(unique(df$`Data type`), "newDataset")
+  # densVals <- getPCAGroupProbabilities(pca, dataTypes, groups)
+  
+  # top3 <- names(densVals[1:3])
+  # gg.boxplots <- getTopBoxplotsWithNewDataset(pca, data2, top3)
+  
+  
+  
+  # output$biplot = renderPlot({gg.biplot})
+  # output$boxplot = renderPlot({gg.boxplot})
+  
+  # output$plotgraph = renderPlot({
+  #   
+  #   cowplot::plot_grid(gg.biplot, 
+  #                      gg.boxplot,
+  #                      nrow = 2, rel_heights = c(1/2, 1/2))
+  #   # gridExtra::grid.arrange(gg.biplot, 
+  #   #                       gg.boxplot,
+  #   #                       ncol = 1)
+  # })
+  
+  list(gg.biplot = gg.biplot, gg.boxplot = gg.boxplot)
+}
 ################################################################################
 
 # Define UI for data upload app ----
 ui <- fluidPage(
   
-  # App title ----
-  titlePanel("Uploading Files"),
+  tags$head(
+    # Note the wrapping of the string in HTML()
+    tags$style(HTML("
+      .btn {
+        background-color:  #337ab7;
+        color: #fff;
+      }
+      
+      .btn:hover {
+        background-color: #1966AB;
+        color: #fff;
+      }
+      
+      .btn:active {
+        background-color: #011f4b !important;
+        color: #fff !important;
+      }"))
+  ),
+  
+  
+  # # App title ----
+  titlePanel(""),
   
   # Sidebar layout with input and output definitions ----
   sidebarLayout(
@@ -624,8 +816,19 @@ ui <- fluidPage(
       # Horizontal line ----
       tags$hr(),
       
+      actionButton(
+        inputId = "submit",
+        label = "Submit"#,
+        #style="color: #fff; background-color: #337ab7; border-color: #2e6da4"
+      ),
+      
+      # Horizontal line ----
+      tags$hr(),
+      
       # Input: Checkbox if file has header ----
       checkboxInput("header", "Header", TRUE),
+      
+      checkboxInput("firstColumnRownames", "First column corresponds to row names", TRUE),
       
       # Input: Select separator ----
       radioButtons("sep", "Separator",
@@ -644,20 +847,30 @@ ui <- fluidPage(
       # Horizontal line ----
       tags$hr(),
       
-      # Input: Select number of rows to display ----
-      radioButtons("disp", "Display",
-                   choices = c(Head = "head",
-                               All = "all"),
-                   selected = "head")
+      radioButtons("omicsTypes", "Omics types",
+                   choices =  c("Metabolomics (MS)", "Metabolomics (NMR)", "Microarray", "Microbiome", 
+                                "Proteomics (iBAQ, Expression Atlas)", "Proteomics (Intensity, Expression Atlas)", 
+                                "Proteomics (LFQ, PRIDE)", "Proteomics (Intensity, PRIDE)", "Proteomics (iBAQ, PRIDE)", 
+                                "RNA-seq (FPKM)", "RNA-seq (raw)", "RNA-seq (TPM)", "scRNA-seq (normalized)", 
+                                "scRNA-seq (unnormalized)", "scProteomics"),
+                   selected = "Proteomics (LFQ, PRIDE)"),
+      
+      width = 3
+     
       
     ),
     
     # Main panel for displaying outputs ----
     mainPanel(
-      
-      # Output: Data file ----
-      tableOutput("contents")
-      
+      conditionalPanel(
+        condition = "input.submit > 0",
+        style = "display: none;",
+        # withSpinner(plotOutput(outputId="plotgraph", width="1100px",height="900px"), type = 5)
+        
+        withSpinner(plotOutput(outputId="plot1", width="1100px",height="900px"), type = 5),
+        withSpinner(plotOutput(outputId="plot2", width="1100px",height="500px"), type = 5)
+      ) 
+
     )
     
   )
@@ -666,102 +879,29 @@ ui <- fluidPage(
 # Define server logic to read selected file ----
 server <- function(input, output) {
   options(shiny.maxRequestSize=300*1024^2)
-  output$contents <- renderTable({
-    
-    # input$file1 will be NULL initially. After the user selects
-    # and uploads a file, head of that data file by default,
-    # or all rows if selected, will be shown.
-    
-    req(input$file1)
-    
-    # Example file: "DIANN_DIANN_AI_GPF_example.csv"
-    mtx <- read.csv(input$file1$datapath,
-                   header = input$header,
-                   sep = input$sep,
-                   quote = input$quote,
-                   check.names = FALSE)
-    
-    mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
-    data.allDatasets <- integrateNewDataset(mtx)
-    
-    selectedDataTypeLevel <- "Data type"
-    data.copy <- data.allDatasets
-    
-    data <- data.copy %>% dplyr::select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% dplyr::rename("Data type" = !!selectedDataTypeLevel)
-    data <- data[!(data$`Data type` %in% c("Metabolomics (Undefined-MS)",
-                                           "Metabolomics (Other ionization-MS)",
-                                           "Proteomics (iBAQ, PRIDE, Undefined)", 
-                                           "Proteomics (Intensity, PRIDE, Undefined)", 
-                                           "Proteomics (LFQ, PRIDE, Undefined)")),]
-    
-    data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5 | `Data type` == "newDataset") %>% ungroup
-    
-    ################################################################################
-    boxplotCols <- setdiff(unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", "min(% NA in analytes)", 
-                                    "max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
-                                    "% NA", "% Analytes with NAs", "% Samples with NAs", "Mean", 
-                                    "Median", "Min", "Max", "median(Variance of samples)", "median(Variance of analytes)", 
-                                    "Variance", "Kurtosis", "Skewness", "|Skewness|", "% Var. explained by PC1", 
-                                    "% Var. explained by PC2", "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
-                                    "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)", "Agglom. coef. hierarch. analyte clustering", 
-                                    "% Distinct values", "Corr(Mean vs. % NA) (Samples)", "Corr(Mean vs. % NA) (Analytes)",
-                                    "sd(Intensity w/ prob(NA) = 50% for sample)", 
-                                    "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
-    
-    data2 <- data[, c("Data type", 
-                      boxplotCols)]
-    
-    # To be log2-transformed:
-    toBeLog2Transformed <- c("# Samples", "# Analytes", 
-                             "min(% NA in analytes)", "max(% NA in analytes)", 
-                             "% Analytes with NAs", "% Samples with NAs",
-                             "median(Variance of samples)", "median(Variance of analytes)", 
-                             "Variance", "Kurtosis", "|Skewness|", "Skewness",
-                             "Lin. coef. of Poly2(Means vs. Vars) (Analytes)", 
-                             "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)",
-                             "sd(Intensity w/ prob(NA) = 50% for sample)", 
-                             "sd(Intensity w/ prob(NA) = 90% for sample)")
-    
-    colsWithNegativeNumbers <- colnames(data2[, sapply(data2, FUN = function(x) any(x <= 0, na.rm = TRUE))])
-    
-    toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)  
-    
-    for (var in toBeLog2Transformed){
-      data2 <- logTransform(df = data2, variable = var, logBase = "log2")
+  observeEvent(
+    eventExpr = input[["submit"]],
+    handlerExpr = {
+      print("PRESSED") #simulation code can go here
+      plots <- generatePlots(input, output) 
+      
+      output$plot1 <- renderPlot({
+        print(plots[["gg.biplot"]])
+      })
+      
+      output$plot2 <- renderPlot({
+        print(plots[["gg.boxplot"]])
+      })
     }
-    
-    data2[sapply(data2, is.infinite)] <- NA
-    
-    
-    df <- data2
-    groupColName <- "Data type"
-    pcaMethod <- "nipals"
-    
-    gg.biplot <- getPCABiplotsNewDataset(df = df %>% dplyr::select(-!!groupColName), 
-                            groups= df[[groupColName]],
-                            alpha = 0.3,
-                            pcaMethod = pcaMethod,
-                            coordRatio = 1/3,
-                            facetZoom = FALSE)
-    
-    groups <- df[[groupColName]]
-    
-    dataTypes <- setdiff(unique(df$`Data type`), "newDataset")
-    densVals <- getPCAGroupProbabilities(pca, dataTypes, groups)
-    
-    top3 <- names(densVals[1:3])
-    gg.boxplots <- getTopBoxplotsWithNewDataset(pca, data2, top3)
-    
-    
-    if(input$disp == "head") {
-      return(head(mtx))
-    }
-    else {
-      return(mtx)
-    }
-    
-  })
-  
+  )
+
+    # if(input$disp == "head") {
+    #   return(head(mtx))
+    # }
+    # else {
+    #   return(mtx)
+    # }
+
 }
 # Run the app ----
 shinyApp(ui, server)
