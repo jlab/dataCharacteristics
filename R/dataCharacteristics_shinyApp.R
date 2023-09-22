@@ -19,6 +19,7 @@ library(biglm)
 library(reshape2)
 library(speedglm)
 
+library(tibble)
 library(gridExtra)
 library(shinydashboardPlus)
 
@@ -434,11 +435,11 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
 
 getPCABiplotsNewDataset <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals") {
   plotPCABiplotNewDataset(df = df %>% dplyr::select(-!!groupColName), 
-                                groups= df[[groupColName]],
-                                alpha = 0.3,
-                                pcaMethod = pcaMethod,
-                                coordRatio = 1/3,
-                                facetZoom = FALSE)
+                          groups= df[[groupColName]],
+                          alpha = 0.3,
+                          pcaMethod = pcaMethod,
+                          coordRatio = 1/3,
+                          facetZoom = FALSE)
 }
 
 integrateNewDataset <- function(mtx) {
@@ -503,108 +504,6 @@ integrateNewDataset <- function(mtx) {
   
   data.allDatasets <- rbind(data.allDatasets, data)
   data.allDatasets
-}
-
-getPCAGroupProbabilities <- function(pca, dataTypes, groups, plot = TRUE) {
-  scores <- data.frame(pca@scores)[,1:2]
-  cond <- scores[which(groups == "newDataset"),]
-  densVals <- c()
-  for (type in dataTypes) {
-    
-    scores.sub <- scores[which(groups == type),]
-    
-    x <- scores.sub$PC1
-    y <- scores.sub$PC2
-    
-    library(MASS)
-    dens <- kde2d(x,y)
-    
-    # create a new data frame of that 2d density grid
-    # (needs checking that I haven't stuffed up the order here of z?)
-    gr <- data.frame(with(dens, expand.grid(x,y)), as.vector(dens$z))
-    names(gr) <- c("xgr", "ygr", "zgr")
-    gr$zgr <- gr$zgr/sum(gr$zgr)
-    
-    # Fit a model
-    mod <- loess(log2(zgr)~xgr*ygr, data=gr, span = 0.1
-                 , control=loess.control(surface="direct")
-    )
-    
-    if (plot) {
-      all.data <- expand.grid(xgr = seq(from = min(gr$xgr), to = max(gr$xgr), length.out = 500),
-                              ygr = seq(from = min(gr$ygr), to = max(gr$ygr), length.out = 500))
-      predicted <- predict(mod, newdata =  all.data)
-      all.data = data.frame(W = 2^as.vector(predicted),
-                            all.data)
-      
-      gg <- ggplot(all.data, aes(x = xgr, y = ygr, z = W)) +
-        stat_contour(geom = "polygon", aes(fill = after_stat(level)) ) +
-        geom_tile(aes(fill = W)) +
-        stat_contour(bins = 10) +
-        xlab("PC1") +
-        ylab("PC2") +
-        xlim(c(min(scores$PC1), max(scores$PC1))) +
-        ylim(c(min(scores$PC2), max(scores$PC2))) +
-        guides(fill = guide_colorbar(title = "Probability")) +
-        ggtitle(type) +
-        theme_bw() +
-        geom_point(aes(x=cond$PC1, y=cond$PC2), col="red", size=3) 
-      
-      ggsave(file=paste0("dataType_2dDensity_", type, ".pdf"), gg)
-    }
-    
-    # Apply the model to the original data to estimate density at that point
-    pointdens <- predict(mod, newdata=data.frame(xgr=cond$PC1, ygr=cond$PC2))
-    pointdens <- 2^pointdens
-    # pointdens <- ifelse(is.na(pointdens), 0, pointdens)
-    print(paste0(type, ": ", pointdens))
-    densVals <- c(densVals, pointdens)
-  }
-  names(densVals) <- dataTypes
-  densVals <- sort(densVals, decreasing = TRUE) 
-  densVals
-}
-
-getTopBoxplotsWithNewDataset <- function(pca, data2, top3) {
-  loadings <- data.frame(pca@loadings)[, 1:2]
-  loadings.abs <- abs(loadings)
-  loadings.abs <- loadings.abs/colSums(loadings.abs)
-  loadings.abs <- loadings.abs %>% mutate(sumPC1PC2 = PC1 + PC2)
-  loadings.abs$variable <- row.names(loadings.abs)
-  loadings.abs.sorted <- loadings.abs %>% arrange(-sumPC1PC2)
-  
-  boxplot.df <- data2 %>% filter(`Data type` %in% top3)
-  boxplot.df.long <- reshape2::melt(boxplot.df)
-  
-  newDatasetValues <- data2 %>% filter(`Data type` == "newDataset") %>% t() %>% as.data.frame()
-  newDatasetValues <- tibble::rownames_to_column(newDatasetValues, "variable") %>% 
-    filter(variable != "Data type")
-  colnames(newDatasetValues) <- c("variable", "value")
-  newDatasetValues$value <- as.numeric(newDatasetValues$value)
-  
-  
-  boxplot.df.long$`Data type` <- factor(boxplot.df.long$`Data type`, levels = rev(top3))
-  ggplot(boxplot.df.long, aes(`Data type`, value)) +
-    geom_violin(aes(fill = `Data type`), alpha=0.5) +
-    geom_boxplot(aes(fill = `Data type`), width=0.5, alpha=0.25, outlier.size=0.5) +
-    coord_flip() +
-    xlab("") +
-    ylab("") +
-    geom_hline(aes(yintercept = value), newDatasetValues, colour = 'blue') +
-    facet_wrap( ~ factor(variable, levels = loadings.abs.sorted$variable), scales = "free_x", ncol=6, strip.position = "bottom") +
-    ggplot2::theme_bw() +
-    ggtitle("Top 3") +
-    #theme_minimal() + 
-    theme(panel.spacing.y=unit(1.5, "lines"),
-          legend.title = element_blank(), axis.text.y = element_text(hjust=0, face = "bold"), 
-          # legend.position="bottom",
-          legend.position = "none",
-          legend.justification = "left", legend.direction = "horizontal",
-          strip.text = element_text(face="bold", size = 6),
-          strip.placement = "outside",                      # Place facet labels outside x axis labels.
-          strip.background = element_blank(),  # Make facet label background white.
-          axis.title = element_blank()) +     
-    guides(fill = guide_legend(reverse = TRUE))
 }
 
 generatePlots <- function(input, output) {
@@ -733,42 +632,18 @@ generatePlots <- function(input, output) {
   print("Plotting")
   # pdf("blub.pdf", height = 10, width = 10)
   gg.boxplot <- ggplot(boxplot.df.long, aes(x = value, y = factor(1))) +
-        geom_violin(alpha=0.5) +
-        geom_boxplot(width=0.5, alpha=0.25, outlier.size=0.5) +
-      geom_rect(data = newDatasetValues, aes(fill = factor(included, levels = c('red', 'green'))), xmin = -Inf, xmax = Inf,
-                 ymin = -Inf, ymax = Inf, alpha = 0.3) +
-  geom_vline(data=newDatasetValues, aes(xintercept=as.numeric(value)), colour = 'blue') +
-  # geom_hline(aes(yintercept = value), newDatasetValues, colour = 'blue') +
-  facet_wrap(. ~ factor(variable, levels=lev), ncol = 4, scales = "free_x") +
-  ggplot2::theme_bw() +
-  theme(axis.title = element_blank(),
+    geom_violin(alpha=0.5) +
+    geom_boxplot(width=0.5, alpha=0.25, outlier.size=0.5) +
+    geom_rect(data = newDatasetValues, aes(fill = factor(included, levels = c('red', 'green'))), xmin = -Inf, xmax = Inf,
+              ymin = -Inf, ymax = Inf, alpha = 0.3) +
+    geom_vline(data=newDatasetValues, aes(xintercept=as.numeric(value)), colour = 'blue') +
+    # geom_hline(aes(yintercept = value), newDatasetValues, colour = 'blue') +
+    facet_wrap(. ~ factor(variable, levels=lev), ncol = 4, scales = "free_x") +
+    ggplot2::theme_bw() +
+    theme(axis.title = element_blank(),
           axis.text.y=element_blank(),
           axis.ticks.y=element_blank(),
           legend.position = "none")
-  
-  
-  # groups <- df[[groupColName]]
-  # 
-  # dataTypes <- setdiff(unique(df$`Data type`), "newDataset")
-  # densVals <- getPCAGroupProbabilities(pca, dataTypes, groups)
-  
-  # top3 <- names(densVals[1:3])
-  # gg.boxplots <- getTopBoxplotsWithNewDataset(pca, data2, top3)
-  
-  
-  
-  # output$biplot = renderPlot({gg.biplot})
-  # output$boxplot = renderPlot({gg.boxplot})
-  
-  # output$plotgraph = renderPlot({
-  #   
-  #   cowplot::plot_grid(gg.biplot, 
-  #                      gg.boxplot,
-  #                      nrow = 2, rel_heights = c(1/2, 1/2))
-  #   # gridExtra::grid.arrange(gg.biplot, 
-  #   #                       gg.boxplot,
-  #   #                       ncol = 1)
-  # })
   
   list(gg.biplot = gg.biplot, gg.boxplot = gg.boxplot)
 }
@@ -856,7 +731,7 @@ ui <- fluidPage(
                    selected = "Proteomics (LFQ, PRIDE)"),
       
       width = 3
-     
+      
       
     ),
     
@@ -870,7 +745,7 @@ ui <- fluidPage(
         withSpinner(plotOutput(outputId="plot1", width="1100px",height="900px"), type = 5),
         withSpinner(plotOutput(outputId="plot2", width="1100px",height="500px"), type = 5)
       ) 
-
+      
     )
     
   )
@@ -894,14 +769,7 @@ server <- function(input, output) {
       })
     }
   )
-
-    # if(input$disp == "head") {
-    #   return(head(mtx))
-    # }
-    # else {
-    #   return(mtx)
-    # }
-
+  
 }
 # Run the app ----
 shinyApp(ui, server)
