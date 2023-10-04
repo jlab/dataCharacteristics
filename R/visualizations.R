@@ -6,6 +6,7 @@ library(ggplot2)
 library(GGally)
 library(ggforce)
 library(stringr)
+library(tibble)
 theme_set(theme_bw())
 
 ################################################################################
@@ -515,9 +516,9 @@ write.csv(data, "datasets_results.csv", row.names = FALSE)
 # Remove datasets with negative values --> potentially due to log already taken
 data <- data[data$nNegativeNumbers == 0,]
 
-# Remove datasets with 
-data <- data[data$medianAnalyteVariance > 0,]
-data <- data[data$medianSampleVariance > 0,]
+# Remove datasets with medianAnalyteVariance or medianSampleVariance of zero or NA
+data <- data[!is.na(data$medianAnalyteVariance) & (data$medianAnalyteVariance > 0),]
+data <- data[!is.na(data$medianSampleVariance) & (data$medianSampleVariance > 0),]
 
 # # data <- dataset %>% dplyr::select(-nNegativeNumbers)
 # # Get %NA per column grouped by data type
@@ -553,7 +554,7 @@ data <- data[,!(colnames(data) %in% seedCols)]
 data <- data[,!(colnames(data) %in% c("minRowNonNaNumber", "maxRowNonNaNumber"))] 
 
 write.csv(data, "datasets_results_clean.csv", row.names = FALSE)
-
+# TODO: Why NAs for rows 596 and 597 ?
 ################################################################################
 
 
@@ -735,8 +736,11 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   # data2 <- data[, c("Data type", 
   #                   boxplotCols, microarrayCols)]
   
-  data2 <- data[, c("Data type", 
-                    boxplotCols)]
+  # row.names(data) <- data$`Dataset ID`
+  # data2 <- data[, c("Data type", 
+  #                   boxplotCols)]
+  
+  data2 <- data %>% tibble::column_to_rownames("Dataset ID") %>% dplyr::select(c("Data type", !!boxplotCols))
   
   # To be log2-transformed:
   toBeLog2Transformed <- c("# Samples", "# Analytes", 
