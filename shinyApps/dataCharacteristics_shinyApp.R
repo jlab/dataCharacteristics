@@ -19,9 +19,12 @@ library(biglm)
 library(reshape2)
 library(speedglm)
 
+library(plotly)
 library(tibble)
 library(gridExtra)
 library(shinydashboardPlus)
+library(ggpubr)
+library(umap)
 
 library(shinycssloaders)
 options(spinner.color="#0275D8", spinner.color.background="#ffffff", spinner.size=2)
@@ -442,6 +445,50 @@ getPCABiplotsNewDataset <- function(df, groupColName = "", addStr = "", pcaMetho
                           facetZoom = FALSE)
 }
 
+plot3DPCA <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals") {
+  
+  pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), method=pcaMethod, nPcs=4, center=TRUE
+                         , scale = "uv")
+  dat <- merge(pcaMethods::scores(pca), df, by=0)
+  
+  # library(htmlwidgets)
+  dat.woNewDataset <- dat %>% dplyr::filter(Row.names != "newDataset")
+  fig <- plotly::plot_ly(dat.woNewDataset, x = ~PC1, y = ~PC2, z = ~PC3,
+                 color = ~as.factor(dat.woNewDataset[[groupColName]]),
+                 type="scatter3d", mode="markers",
+                 #colors = c('#636EFA','#EF553B') ,
+                 marker = list(size = 3, opacity = 0.5),
+                 hovertext = paste("Dataset ID :", dat.woNewDataset$Row.names)
+                 # , alpha = 0.75
+  ) #%>%
+  # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
+  fig <- fig %>%
+    plotly::layout(
+      hoverlabel = list(namelength = -1),
+      legend = list(itemsizing = "constant")
+    )
+
+ #  htmlwidgets::saveWidget(fig, paste0("plotly_", pcaMethod, "_", addStr,".html"), selfcontained = F, libdir = "lib")
+  
+  newDataset <- dat[dat$Row.names == "newDataset",]
+  fig <- plotly::add_trace(fig, 
+                   x = newDataset$PC1, 
+                   y = newDataset$PC2, 
+                   z = newDataset$PC3, 
+                   type = "scatter3d", mode = "markers", color = I("red"), 
+                   inherit = FALSE, name = "Provided Dataset")
+  
+  
+  fig
+  
+  
+  # library(scatterplot3d)
+  # library(rgl)
+  # car::scatter3d(x = dat$PC1, y = dat$PC2, z = dat$PC3, groups = as.factor(dat[[groupColName]]),
+  #           surface=FALSE, ellipsoid = TRUE)
+}
+
+
 integrateNewDataset <- function(mtx) {
   data <- getDataCharacteristics(mtx)
   data <- data.frame(as.list(data))
@@ -506,6 +553,87 @@ integrateNewDataset <- function(mtx) {
   data.allDatasets
 }
 
+plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "", 
+                            ySampleMeanMin = NULL, ySampleMeanMax = NULL) {
+  colMeans <- colMeans(mtx.corr, na.rm = TRUE)
+  colNaPercentage <- colMeans(is.na(mtx.corr))*100
+  # corrPlot <- ggscatter(data.frame(colNaPercentage, colMeans), x = "colNaPercentage", y = "colMeans",
+  #     title = plotTitle,
+  #     subtitle =  plotSubtitle,
+  #     xlab = "NA Percentage",
+  #     ylab= "Sample Mean",
+  #     add = "reg.line",                                 # Add regression line
+  #     conf.int = TRUE,                                  # Add confidence interval
+  #     add.params = list(color = "blue",
+  #         fill = "lightgray")) +
+  #     stat_cor(method = "spearman", label.x = 3) + # Add correlation coefficient
+  #     xlim(0, 100) +
+  #     theme(plot.title = element_text(margin = margin(10, 0, 10, 0)))
+  
+  corRes <- cor.test(colMeans, colNaPercentage, method = "spearman")
+  corrPlot <- ggplot(data.frame(colNaPercentage, colMeans), aes(colNaPercentage, colMeans)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm") +
+    # ggpubr::theme_pubr() +
+    theme_bw() +
+    labs(x = "%NA in sample", y = "Sample mean") +
+    ggtitle(plotTitle, subtitle = plotSubtitle) +
+    xlim(0, 100) 
+  
+  if (!is.null(ySampleMeanMin) & !is.null(ySampleMeanMax))
+    corrPlot <- corrPlot + ylim(c(ySampleMeanMin, ySampleMeanMax))
+  
+  if (!is.na(corRes$p.value) & corRes$p.value < 0.05) corrPlot <- corrPlot + ggpubr::stat_cor(method = "spearman", label.x = 3)
+  
+  corrPlot
+}
+
+
+getUMAPNewDataset <- function(df, groupColName = "") {
+  
+  # iris.umap <- umap(df %>% dplyr::select(-!!groupColName) %>% dplyr::select_if(~ !any(is.na(.))))
+  set.seed(142)
+  umap_fit <- df %>% dplyr::mutate(ID=row_number())  %>% dplyr::select(-!!groupColName) %>% dplyr::select_if(~ !any(is.na(.))) %>%
+    remove_rownames() %>% column_to_rownames("ID") %>%
+    scale() %>%
+    umap::umap(n_components = 3)
+  
+  groupVec <- df[[groupColName]]
+  umap_df <- umap_fit$layout %>%
+    as.data.frame()%>%
+    dplyr::rename(UMAP1="V1",
+                  UMAP2="V2",
+                  UMAP3="V3") %>%
+    mutate(!!groupColName := !!groupVec) # %>%
+  # mutate(dataType=!!groupVec) # %>%
+  # inner_join(penguins_meta, by="ID")
+  row.names(umap_df) <- row.names(df)
+  
+  dat.woNewDataset <- umap_df %>% dplyr::filter(!!as.name(groupColName) != "newDataset")
+  fig <- plotly::plot_ly(dat.woNewDataset, x = ~UMAP1, y = ~UMAP2, z = ~UMAP3,
+                         color = ~as.factor(dat.woNewDataset[[groupColName]]),
+                         type="scatter3d", mode="markers",
+                         #colors = c('#636EFA','#EF553B') ,
+                         marker = list(size = 3, opacity = 0.5),
+                         hovertext = paste("Dataset ID :", row.names(dat.woNewDataset))
+  ) 
+  
+  fig <- fig %>%
+    plotly::layout(
+      hoverlabel = list(namelength = -1),
+      legend = list(itemsizing = "constant")
+    )
+  
+  newDataset <- umap_df[row.names(umap_df) == "newDataset",]
+  fig <- plotly::add_trace(fig, 
+                           x = newDataset$UMAP1, 
+                           y = newDataset$UMAP2, 
+                           z = newDataset$UMAP3, 
+                           type = "scatter3d", mode = "markers", color = I("red"), 
+                           inherit = FALSE, name = "Provided Dataset")
+  fig
+}
+
 generatePlots <- function(input, output) {
   
   # input$file1 will be NULL initially. After the user selects
@@ -515,18 +643,23 @@ generatePlots <- function(input, output) {
   req(input$file1)
   
   # Example file: "DIANN_DIANN_AI_GPF_example.csv"
-  mtx <- read.csv(input$file1$datapath,
-                  header = input$header,
-                  sep = input$sep,
-                  quote = input$quote,
-                  check.names = FALSE)
+  # mtx <- read.csv(input$file1$datapath,
+  #                 header = input$header,
+  #                 sep = input$sep,
+  #                 quote = input$quote,
+  #                 check.names = FALSE)
   
+  # path <- "/Users/ebrombacher/Documents/PhD/dataCharacteristics_WiP/DIANN_DIANN_AI_GPF_example.csv"
+  mtx <- data.table::fread(input$file1$datapath,
+                           header = input$header,
+                           data.table = FALSE,
+                           check.names = FALSE)
   
   if (input$firstColumnRownames) mtx <- mtx[, 2:ncol(mtx)]
   
   mtx <- as.matrix(mtx)
   mtx <- removeEmptyRowsAndColumns(mtx, zerosToNA = TRUE)
-  
+
   data.allDatasets <- integrateNewDataset(mtx)
   
   allDataTypeLevels <- c("Data type", "Data type subgroups")
@@ -554,8 +687,11 @@ generatePlots <- function(input, output) {
                                   "sd(Intensity w/ prob(NA) = 50% for sample)", 
                                   "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
   
-  data2 <- data[, c("Data type", 
-                    boxplotCols)]
+  # row.names(data) <- data$`Dataset ID`
+  # data2 <- data[, c("Data type", 
+  #                   boxplotCols)]
+  
+  data2 <- data %>% column_to_rownames("Dataset ID") %>% dplyr::select(c("Data type", !!boxplotCols))
   
   # To be log2-transformed:
   toBeLog2Transformed <- c("# Samples", "# Analytes", 
@@ -585,6 +721,9 @@ generatePlots <- function(input, output) {
   
   gg.biplot <- getPCABiplotsNewDataset(df = df, 
                                        groupColName = groupColName)
+  
+  plotlyUMAP <- getUMAPNewDataset(df, groupColName = groupColName)
+
   
   selectedDataType <- input$omicsTypes # "Proteomics (LFQ, PRIDE)"
   
@@ -616,20 +755,24 @@ generatePlots <- function(input, output) {
   colnames(newDatasetValues) <- c("variable", "value")
   newDatasetValues$value <- as.numeric(newDatasetValues$value)
   
-  # library(Rmisc)
-  # ci.df <- data.frame(t(sapply(boxplot.df[, 2:ncol(boxplot.df)],  
-  #          function(x) Rmisc::CI(x[!is.na(x)], ci = 0.95) )))
-  
-  quantile.df <- data.frame(t(sapply(boxplot.df[, 2:ncol(boxplot.df)],  
-                                     function(x) quantile(x[!is.na(x)]) )))
+  quantile.df <- data.frame(t(sapply(boxplot.df[, 2:ncol(boxplot.df)],
+                                     function(x) quantile(x[!is.na(x)], c(.05, .95)) )))
   quantile.df$variable <- row.names(quantile.df)
   newDatasetValues <- dplyr::left_join(newDatasetValues, quantile.df, by = "variable")
   newDatasetValues$included <- ifelse(
-    (newDatasetValues$value >= newDatasetValues$X25.) & 
-      (newDatasetValues$value <= newDatasetValues$X75.), 'green', 'red')
+    (newDatasetValues$value >= newDatasetValues$X5.) &
+      (newDatasetValues$value <= newDatasetValues$X95.), 'green', 'red')
   
+  # library(Rmisc)
+  # ci.df <- data.frame(t(sapply(boxplot.df[, 2:ncol(boxplot.df)],
+  #                              function(x) Rmisc::CI(x[!is.na(x)], ci = 0.95) )))
+  # ci.df$variable <- row.names(ci.df)
+  # newDatasetValues <- dplyr::left_join(newDatasetValues, ci.df, by = "variable")
+  # newDatasetValues$included <- ifelse(
+  #   (newDatasetValues$value >= newDatasetValues$lower) & 
+  #     (newDatasetValues$value <= newDatasetValues$upper), 'green', 'red')
   
-  print("Plotting")
+  # print("Plotting")
   # pdf("blub.pdf", height = 10, width = 10)
   gg.boxplot <- ggplot(boxplot.df.long, aes(x = value, y = factor(1))) +
     geom_violin(alpha=0.5) +
@@ -645,16 +788,27 @@ generatePlots <- function(input, output) {
           axis.ticks.y=element_blank(),
           legend.position = "none")
   
-  list(gg.biplot = gg.biplot, gg.boxplot = gg.boxplot)
+  plotlyPCA <- plot3DPCA(df = df, groupColName = groupColName)
+  correlationplot <- plotCorrelation(mtx)
+  
+  list(gg.biplot = gg.biplot, 
+       plotlyUMAP = plotlyUMAP,
+       gg.boxplot = gg.boxplot, 
+       plotlyPCA = plotlyPCA,
+       correlationplot = correlationplot)
 }
 ################################################################################
 
 # Define UI for data upload app ----
 ui <- fluidPage(
-  
   tags$head(
     # Note the wrapping of the string in HTML()
+    #       .legendpoints .scatterpts {
     tags$style(HTML("
+       g.legendpoints > path.scatterpts {
+        opacity : 1 !important;
+      }              
+                    
       .btn {
         background-color:  #337ab7;
         color: #fff;
@@ -668,7 +822,9 @@ ui <- fluidPage(
       .btn:active {
         background-color: #011f4b !important;
         color: #fff !important;
-      }"))
+      }
+      
+      g.hovertext > path {opacity: .3;}"))
   ),
   
   
@@ -688,9 +844,6 @@ ui <- fluidPage(
                            "text/comma-separated-values,text/plain",
                            ".csv")),
       
-      # Horizontal line ----
-      tags$hr(),
-      
       actionButton(
         inputId = "submit",
         label = "Submit"#,
@@ -705,20 +858,20 @@ ui <- fluidPage(
       
       checkboxInput("firstColumnRownames", "First column corresponds to row names", TRUE),
       
-      # Input: Select separator ----
-      radioButtons("sep", "Separator",
-                   choices = c(Comma = ",",
-                               Semicolon = ";",
-                               Tab = "\t"),
-                   selected = ","),
-      
-      # Input: Select quotes ----
-      radioButtons("quote", "Quote",
-                   choices = c(None = "",
-                               "Double Quote" = '"',
-                               "Single Quote" = "'"),
-                   selected = '"'),
-      
+      # # Input: Select separator ----
+      # radioButtons("sep", "Separator",
+      #              choices = c(Comma = ",",
+      #                          Semicolon = ";",
+      #                          Tab = "\t"),
+      #              selected = ","),
+      # 
+      # # Input: Select quotes ----
+      # radioButtons("quote", "Quote",
+      #              choices = c(None = "",
+      #                          "Double Quote" = '"',
+      #                          "Single Quote" = "'"),
+      #              selected = '"'),
+
       # Horizontal line ----
       tags$hr(),
       
@@ -741,9 +894,19 @@ ui <- fluidPage(
         condition = "input.submit > 0",
         style = "display: none;",
         # withSpinner(plotOutput(outputId="plotgraph", width="1100px",height="900px"), type = 5)
-        
-        withSpinner(plotOutput(outputId="plot1", width="1100px",height="900px"), type = 5),
-        withSpinner(plotOutput(outputId="plot2", width="1100px",height="500px"), type = 5)
+        # rglwidgetOutput("graph",  width = 1100, height = 600),
+        h1("How close is provided dataset to selected omics type?"),
+        withSpinner(plotOutput(outputId="boxplot", width="1100px",height="500px"), type = 5),
+        hr(),
+        h1("PCA"),
+        withSpinner(plotlyOutput('plotlyPCA', width="1100px",height="500px"), type = 5),
+        hr(),
+        h1("UMAP"),
+        # withSpinner(plotOutput(outputId="biplot", width="1100px",height="500px"), type = 5),
+        withSpinner(plotlyOutput('plotlyUMAP', width="1100px",height="600px"), type = 5),
+        hr(),
+        h1("Sample mean vs. %NA for provided dataset"),
+        withSpinner(plotOutput(outputId="correlationplot", width="1100px",height="500px"), type = 5)
       ) 
       
     )
@@ -760,13 +923,33 @@ server <- function(input, output) {
       print("PRESSED") #simulation code can go here
       plots <- generatePlots(input, output) 
       
-      output$plot1 <- renderPlot({
+      output$plotlyPCA <- renderPlotly({
+        plots[["plotlyPCA"]]
+      })
+      
+      output$biplot <- renderPlot({
         print(plots[["gg.biplot"]])
       })
       
-      output$plot2 <- renderPlot({
+      output$plotlyUMAP <- renderPlotly({
+        plots[["plotlyUMAP"]]
+      })
+      
+      output$correlationplot <- renderPlot({
+        print(plots[["correlationplot"]])
+      })
+      
+      output$boxplot <- renderPlot({
         print(plots[["gg.boxplot"]])
       })
+      
+      # output$graph <- renderRglwidget({
+      #   rgl.open(useNULL=T)
+      #   plots[["plotlyplot"]]
+      #   rglwidget()
+      # })
+      
+
     }
   )
   
