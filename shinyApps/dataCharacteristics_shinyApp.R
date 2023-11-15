@@ -498,8 +498,8 @@ integrateNewDataset <- function(mtx) {
   data$prctPC2 <- 100 * data$prctPC2
   
   data <- data %>%
-    mutate_if(is.integer, as.numeric) %>% 
-    mutate("prctnDistinctValues" = nDistinctValues/((nSamples * nAnalytes) * ((100 - percNATotal)/100)) * 100 ) %>%
+    dplyr::mutate_if(is.integer, as.numeric) %>% 
+    dplyr::mutate("prctnDistinctValues" = nDistinctValues/((nSamples * nAnalytes) * ((100 - percNATotal)/100)) * 100 ) %>%
     dplyr::select(-c(nDistinctValues, nNegativeNumbers))
   
   data$datasetID <- data$dataType <- data$dataTypeSubgroups <- "newDataset"
@@ -544,7 +544,7 @@ integrateNewDataset <- function(mtx) {
   
   
   
-  data.allDatasets <-  read.csv("datasets_results_clean_renamed.csv", check.names = FALSE)
+  data.allDatasets <-  read.csv("/Users/ebrombacher/Documents/PhD/dataCharacteristics_WiP/datasets_results_clean_renamed.csv", check.names = FALSE)
   data.allDatasets$`Corr(Mean vs. % NA) (Samples) (p-Value)` <- 
     data.allDatasets$`Corr(Mean vs. % NA) (Analytes) (p-Value)` <-
     data.allDatasets$`Bimodality of sample correlations` <- NULL
@@ -604,7 +604,7 @@ getUMAPNewDataset <- function(df, groupColName = "") {
     dplyr::rename(UMAP1="V1",
                   UMAP2="V2",
                   UMAP3="V3") %>%
-    mutate(!!groupColName := !!groupVec) # %>%
+    dplyr::mutate(!!groupColName := !!groupVec) # %>%
   # mutate(dataType=!!groupVec) # %>%
   # inner_join(penguins_meta, by="ID")
   row.names(umap_df) <- row.names(df)
@@ -714,6 +714,10 @@ generatePlots <- function(input, output) {
   
   data2[sapply(data2, is.infinite)] <- NA
   
+  df.newDatasetOnly <- data2 %>% filter(`Data type` == "newDataset") %>% dplyr::select(-`Data type`)
+  df.newDatasetOnly.vec <- as.vector(unlist(df.newDatasetOnly))
+  names(df.newDatasetOnly.vec) <- colnames(df.newDatasetOnly)
+  df.newDatasetOnly.vec <- paste(names(df.newDatasetOnly.vec), df.newDatasetOnly.vec, sep = ": ", collapse = "<br/>")
   
   df <- data2
   groupColName <- "Data type"
@@ -795,7 +799,8 @@ generatePlots <- function(input, output) {
        plotlyUMAP = plotlyUMAP,
        gg.boxplot = gg.boxplot, 
        plotlyPCA = plotlyPCA,
-       correlationplot = correlationplot)
+       correlationplot = correlationplot,
+       df.newDatasetOnly.vec = df.newDatasetOnly.vec)
 }
 ################################################################################
 
@@ -856,7 +861,7 @@ ui <- fluidPage(
       # Input: Checkbox if file has header ----
       checkboxInput("header", "Header", TRUE),
       
-      checkboxInput("firstColumnRownames", "First column corresponds to row names", TRUE),
+      checkboxInput("firstColumnRownames", "First column contains row names", TRUE),
       
       # # Input: Select separator ----
       # radioButtons("sep", "Separator",
@@ -882,9 +887,8 @@ ui <- fluidPage(
                                 "RNA-seq (FPKM)", "RNA-seq (raw)", "RNA-seq (TPM)", "scRNA-seq (normalized)", 
                                 "scRNA-seq (unnormalized)", "scProteomics"),
                    selected = "Proteomics (LFQ, PRIDE)"),
-      
+
       width = 3
-      
       
     ),
     
@@ -895,17 +899,21 @@ ui <- fluidPage(
         style = "display: none;",
         # withSpinner(plotOutput(outputId="plotgraph", width="1100px",height="900px"), type = 5)
         # rglwidgetOutput("graph",  width = 1100, height = 600),
-        h1("How close is provided dataset to selected omics type?"),
+        h2("Data characteristics:"),
+        withSpinner(htmlOutput(outputId="dataCharacteristics"), type = 5),
+        hr(),
+        h2("How close is provided dataset to selected omics type?"),
+        h3("If dataset lies between the 5th and 95th percentile box is colored green, else red"),
         withSpinner(plotOutput(outputId="boxplot", width="1100px",height="500px"), type = 5),
         hr(),
-        h1("PCA"),
+        h2("PCA"),
         withSpinner(plotlyOutput('plotlyPCA', width="1100px",height="500px"), type = 5),
         hr(),
-        h1("UMAP"),
+        h2("UMAP"),
         # withSpinner(plotOutput(outputId="biplot", width="1100px",height="500px"), type = 5),
         withSpinner(plotlyOutput('plotlyUMAP', width="1100px",height="600px"), type = 5),
         hr(),
-        h1("Sample mean vs. %NA for provided dataset"),
+        h2("Sample mean vs. %NA for provided dataset"),
         withSpinner(plotOutput(outputId="correlationplot", width="1100px",height="500px"), type = 5)
       ) 
       
@@ -949,6 +957,10 @@ server <- function(input, output) {
       #   rglwidget()
       # })
       
+      output$dataCharacteristics <- renderUI({
+        HTML(plots[["df.newDatasetOnly.vec"]])
+      })
+
 
     }
   )
