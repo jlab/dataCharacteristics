@@ -717,7 +717,8 @@ generatePlots <- function(input, output) {
   df.newDatasetOnly <- data2 %>% filter(`Data type` == "newDataset") %>% dplyr::select(-`Data type`)
   df.newDatasetOnly.vec <- as.vector(unlist(df.newDatasetOnly))
   names(df.newDatasetOnly.vec) <- colnames(df.newDatasetOnly)
-  df.newDatasetOnly.vec <- paste(names(df.newDatasetOnly.vec), df.newDatasetOnly.vec, sep = ": ", collapse = "<br/>")
+  df.newDatasetOnly.vec <- paste(names(df.newDatasetOnly.vec), 
+                                 round(df.newDatasetOnly.vec, 3), sep = ": ", collapse = "<br/>")
   
   df <- data2
   groupColName <- "Data type"
