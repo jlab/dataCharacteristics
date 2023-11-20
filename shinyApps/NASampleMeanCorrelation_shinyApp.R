@@ -4,71 +4,60 @@
 
 library(shiny)
 library(ggplot2)
+library(ggpubr)
 library(gridExtra)
 library(ggplotify)
 library(reshape2)
+library(grid)
 library(shinydashboardPlus)
+
+library(speedglm)
+
+library(preprocessCore)
 
 library(shinycssloaders)
 options(spinner.color="#0275D8", spinner.color.background="#ffffff", spinner.size=2)
 ##################################################################################
 # FUNCTIONS
 
-rep.row<-function(x,n){
-    matrix(rep(x,each=n),nrow=n)
-}
-rep.col<-function(x,n){
-    matrix(rep(x,each=n), ncol=n, byrow=TRUE)
-}
-
-getQuantile <- function(vec = c(), prob=0.9){
+getQuantile <- function(vec = c(), prob=0.9, forAllSamples = FALSE){
   vec[is.na(vec)] <- 0
   q <- quantile(vec, probs = c(prob))
   
-  propNotNA <- sum(vec>0)/length(vec)
-  if(propNotNA < 2*(1-prob))  
-    q <- NA
-  return(q)
+  if (!forAllSamples){
+    propNotNA <- sum(vec>0)/length(vec)
+    if(propNotNA < 2*(1-prob))  
+      q <- NA
   }
+  return(q)
+}
 
-plotBoxplots <- function(mtx, plotTitle, plotSubtitle, yValueMin, yValueMax) {
-
-  quantiles <- reshape2::melt(data.frame(as.list(apply(mtx, 2, getQuantile)), check.names = FALSE))
+plotBoxplots <- function(mtx, plotTitle = "", plotSubtitle = "", 
+                         yValueMin = NULL, yValueMax = NULL) {
+  
+  quantiles <- reshape2::melt(data.frame(as.list(apply(mtx, 2, getQuantile, forAllSamples = FALSE)), check.names = FALSE))
+  quantilesAll <- reshape2::melt(data.frame(as.list(apply(mtx, 2, getQuantile, forAllSamples = TRUE)), check.names = FALSE))
   
   gg <- ggplot(reshape2::melt(mtx) , aes(x=as.factor(Var2), y=value)) + 
     geom_boxplot() + geom_jitter(color="black", size=0.1, alpha=0.2) + 
     labs(title = plotTitle, subtitle = plotSubtitle, y="Intensity", x = "") + 
     theme_bw() +
     theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-    # stat_summary(fun = getQuantile,
-    #              geom = "line",
-    #              aes(group = 1),
-    #              col = "red") 
     geom_line(data = quantiles,
               aes(x = variable, y = value, group = 1), size = 0.8, color = "red") +
-    ylim(c(yValueMin, yValueMax))
-  
+    geom_point(data = quantilesAll,
+               aes(x = variable, y = value, group = 1), size = 0.5, color = "red") 
+
+  if (!is.null(yValueMin) & !is.null(yValueMax))
+    gg <- gg + ylim(c(yValueMin, yValueMax))
+
   print(gg)
 }
 
-
-library(ggpubr)
 plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "", 
                             ySampleMeanMin = NULL, ySampleMeanMax = NULL) {
     colMeans <- colMeans(mtx.corr, na.rm = TRUE)
     colNaPercentage <- colMeans(is.na(mtx.corr))*100
-    # corrPlot <- ggscatter(data.frame(colNaPercentage, colMeans), x = "colNaPercentage", y = "colMeans",
-    #     title = plotTitle,
-    #     subtitle =  plotSubtitle,
-    #     xlab = "NA Percentage",
-    #     ylab= "Sample Mean",
-    #     add = "reg.line",                                 # Add regression line
-    #     conf.int = TRUE,                                  # Add confidence interval
-    #     add.params = list(color = "blue",
-    #         fill = "lightgray")) +
-    #     stat_cor(method = "spearman", label.x = 3) + # Add correlation coefficient
-    #     xlim(0, 100) +
-    #     theme(plot.title = element_text(margin = margin(10, 0, 10, 0)))
     
     corRes <- cor.test(colMeans, colNaPercentage, method = "spearman")
     corrPlot <- ggplot(data.frame(colNaPercentage, colMeans), aes(colNaPercentage, colMeans)) +
@@ -76,7 +65,7 @@ plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "",
       geom_smooth(method = "lm") +
       # ggpubr::theme_pubr() +
       theme_bw() +
-      labs(x = "NA Percentage", y = "Sample Mean") +
+      labs(x = "NA Percentage in Sample", y = "Sample Mean") +
       ggtitle(plotTitle, subtitle = plotSubtitle) +
       xlim(0, 100) 
     
@@ -98,7 +87,8 @@ plotProbability <- function(mtx, plotTitle = "", plotSubtitle = "", withLegend =
   data.long$isNA <- as.integer(is.na(data.long$Value))
   
   library(speedglm)
-  lmModel <- speedglm::speedlm(Value ~ Feature + Sample, data = data.long,fitted=T)
+  lmModel <- speedglm::speedlm(Value ~ Feature + Sample, data = data.long,
+                               fitted = TRUE)
   predicted <- predict(lmModel,data=data.long)
   
   imputed <- data.long$Value
@@ -111,10 +101,16 @@ plotProbability <- function(mtx, plotTitle = "", plotSubtitle = "", withLegend =
 
   data.long$prob <- c(predict(glmModel, type="response"))
   
-  plot(data.long$imputed, data.long$prob)
+  
+  data.long.95Quantile <- data.long %>% 
+    mutate(imputed = ifelse(imputed > quantile(imputed, .95), NA, imputed)) %>%
+    dplyr::filter(!is.na(imputed))
+  
+  # plot(data.long$imputed, data.long$prob)
   
   library(ggplot2)
-  gg <- ggplot(data.long, aes(x = imputed, y = prob, color = Sample)) +
+  gg <- ggplot(data.long.95Quantile, # data.long, 
+               aes(x = imputed, y = prob, color = Sample)) +
     geom_point(size = 1, alpha = 0.5) +
     theme_bw() +
     xlab("Intensity") +
@@ -224,8 +220,7 @@ msb.applyDetectionLimit <- function(dat, q90 = .1, q50 = .2, qSD = 0,
     stop("q50 should be larger than q90")
   
   quants <- quantile(dat, probs = c(q90, q50)) # the quantiles in the data
-  logit <- qlogis # ADDED
-  scaleX <- (quants[2] - quants[1]) / (logit(0.9) - logit(0.5)) # how the x-axis of the inv logit has to be scaled
+  scaleX <- (quants[2] - quants[1]) / (qlogis(0.9) - qlogis(0.5)) # how the x-axis of the inv logit has to be scaled
   
   # do it column-wise
   sampleDependency <- rnorm(ncol(dat), mean = 0, sd = qSD)
@@ -251,6 +246,15 @@ msb.applyDetectionLimit <- function(dat, q90 = .1, q50 = .2, qSD = 0,
   
 }
 
+
+runQuantileNormalization <- function(mtx){
+  rowNames <- row.names(mtx)
+  colNames <- colnames(mtx)
+  mtx.norm <- preprocessCore::normalize.quantiles(mtx)
+  row.names(mtx.norm) <- rowNames
+  colnames(mtx.norm) <- colNames
+  mtx.norm
+}
 
 
 generateMatrices <- function(input, seed, saveParameters = TRUE) {
@@ -282,14 +286,17 @@ generateMatrices <- function(input, seed, saveParameters = TRUE) {
   
   dat2 <- msb.applyDetectionLimit(dat, q50=q50, q90=q90, qSD=qSD, doPlot=FALSE)
   
-  # boxplot(cbind(dat2$dat,dat2$datNA))
-  
   idxNA <- sample(seq(length(dat2$dat)), sum(is.na(dat2$datNA)))
   datRandomNA <- dat2$dat
   datRandomNA[idxNA] <- NA
   
+  dat.norm <- runQuantileNormalization(dat)
   
-  list(dat = dat2$dat, datThrNA = dat2$datNA, datRandomNA = datRandomNA)
+  list(dat = dat2$dat, datThrNA = dat2$datNA, datRandomNA = datRandomNA,
+       dat.norm = runQuantileNormalization(dat2$dat),
+       datThrNA.norm = runQuantileNormalization(dat2$datNA),
+       datRandomNA.norm = runQuantileNormalization(datRandomNA)
+       )
 }
 
 saveData <- function(mtxs, seed){
@@ -305,9 +312,16 @@ savePlots <- function(ptlist, seed){
   }
 }
 
-generatePlots <- function(mtxs, output, seed, savePlots = TRUE) {
+generatePlots <- function(input, mtxs, output, seed) {
+  
+  savePlots <- input$savePlots
   yValueMin <- min(c(c(mtxs$dat), c(mtxs$datThrNA), c(mtxs$datRandomNA)), na.rm = TRUE)
   yValueMax <- max(c(c(mtxs$dat), c(mtxs$datThrNA), c(mtxs$datRandomNA)), na.rm = TRUE)
+  
+  yValueMin.norm <- min(c(c(mtxs$dat.norm), c(mtxs$datThrNA.norm), 
+                          c(mtxs$datRandomNA.norm)), na.rm = TRUE)
+  yValueMax.norm <- max(c(c(mtxs$dat.norm), c(mtxs$datThrNA.norm), 
+                          c(mtxs$datRandomNA.norm)), na.rm = TRUE)
   
   # ySampleMeanMin <- min(c(colMeans(mtxs$dat, na.rm = TRUE), 
   #                         colMeans(mtxs$datThrNA,na.rm = TRUE), 
@@ -316,23 +330,24 @@ generatePlots <- function(mtxs, output, seed, savePlots = TRUE) {
   #                         colMeans(mtxs$datThrNA,na.rm = TRUE), 
   #                         colMeans(mtxs$datRandomNA, na.rm = TRUE)), na.rm = TRUE)
   
+  
   output$plotgraph = renderPlot({
     pt1 <- plotBoxplots(mtx = mtxs$dat, 
                         # plotTitle = "No NAs", 
                         plotTitle = "", 
-                        plotSubtitle = "Red line indicates 90th percentile", 
+                        plotSubtitle = "Red line/point indicates 90th percentile", 
                         yValueMin = yValueMin, yValueMax = yValueMax)
     
     pt2 <- plotBoxplots(mtx = mtxs$datThrNA, 
                         # plotTitle = "Detection limit-related NAs", 
                         plotTitle = "", 
-                        plotSubtitle = "Red line indicates 90th percentile", 
+                        plotSubtitle = "Red line/point indicates 90th percentile", 
                         yValueMin = yValueMin, yValueMax = yValueMax)
     
     pt3 <- plotBoxplots(mtx = mtxs$datRandomNA, 
                         # plotTitle = "Random NAs", 
                         plotTitle = "", 
-                        plotSubtitle = "Red line indicates 90th percentile", 
+                        plotSubtitle = "Red line/point indicates 90th percentile", 
                         yValueMin = yValueMin, yValueMax = yValueMax)
     
     pt4 <- plotCorrelation(mtx.corr = mtxs$dat, 
@@ -371,11 +386,31 @@ generatePlots <- function(mtxs, output, seed, savePlots = TRUE) {
                            plotTitle = "",
                            plotSubtitle = "Points correspond to data points")
     
-    ptlist <- list(pt1, pt2, pt3, pt4, pt5, pt6, pt7, pt8, pt9)
+    pt10 <- plotBoxplots(mtx = mtxs$dat.norm, 
+                        # plotTitle = "No NAs", 
+                        plotTitle = "", 
+                        plotSubtitle = "Red line/point indicates 90th percentile", 
+                        yValueMin = yValueMin.norm, yValueMax = yValueMax.norm)
+    
+    pt11 <- plotBoxplots(mtx = mtxs$datThrNA.norm, 
+                        # plotTitle = "Detection limit-related NAs", 
+                        plotTitle = "", 
+                        plotSubtitle = "Red line/point indicates 90th percentile", 
+                        yValueMin = yValueMin.norm, yValueMax = yValueMax.norm)
+    
+    pt12 <- plotBoxplots(mtx = mtxs$datRandomNA.norm, 
+                        # plotTitle = "Random NAs", 
+                        plotTitle = "", 
+                        plotSubtitle = "Red line/point indicates 90th percentile", 
+                        yValueMin = yValueMin.norm, yValueMax = yValueMax.norm)
+    
+    
+    ptlist <- list(pt1, pt2, pt3, pt4, pt5, pt6, pt7, pt8, pt9, pt10, pt11, pt12)
     names(ptlist) <- c("boxplots_NoNA", "boxplots_ThrNA", "boxplots_RandomNA",
                        "correlationPlot_NoNA", "correlationPlot_ThrNA", "correlationPlot_RandomNA",
-                       "NAProbabiltyPlot_NoNA", "NAProbabiltyPlot_ThrNA", "NAProbabiltyPlot_RandomNA")
-    to_delete <- !sapply(ptlist,is.null)
+                       "NAProbabiltyPlot_NoNA", "NAProbabiltyPlot_ThrNA", "NAProbabiltyPlot_RandomNA",
+                       "boxplots_NoNA.norm", "boxplots_ThrNA.norm", "boxplots_RandomNA.norm")
+    to_delete <- !sapply(ptlist, is.null)
     ptlist <- ptlist[to_delete] 
     if (length(ptlist)==0) return(NULL)
     
@@ -384,12 +419,29 @@ generatePlots <- function(mtxs, output, seed, savePlots = TRUE) {
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/2, nrow = 2)
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/3, nrow = 3)
     
-    
-    grid.arrange(arrangeGrob(pt1, pt4, pt7, top=ggpubr::text_grob("No NAs", size = 15, face = "bold")), 
-                 arrangeGrob(pt2, pt5, pt8, top=ggpubr::text_grob("Detection limit-related NAs", size = 15, face = "bold")),
-                 arrangeGrob(pt3, pt6, pt9, top=ggpubr::text_grob("Random NAs", size = 15, face = "bold")),
-                 ncol = 3)
-    # grid.arrange(grobs=ptlist,ncol=length(ptlist)/2)
+    grid.arrange( arrangeGrob(grid::textGrob("Sample\ndistributions\n(unnormalized)",
+                                             gp=grid::gpar(fontsize=10, fontface = "bold")),
+                   grid::textGrob(" NA Percentage vs.\nSample Mean\n(unnormalized)",
+                                  gp=grid::gpar(fontsize=10, fontface = "bold")),
+                   grid::textGrob("Intensity vs.\nNA Probability\n(unnormalized)",
+                                  gp=grid::gpar(fontsize=10, fontface = "bold")),
+                   grid::textGrob("Sample\ndistributions\n(normalized)",
+                                  gp=grid::gpar(fontsize=10, fontface = "bold")),
+                   nrow = 4),
+                 arrangeGrob(pt1, pt4, pt7, pt10, 
+                             top=ggpubr::text_grob(
+                               "No NAs", 
+                               size = 15, face = "bold"), nrow = 4), 
+                 arrangeGrob(pt2, pt5, pt8, pt11, 
+                             top=ggpubr::text_grob(
+                               "Sample-dependent detection limit-related NAs", 
+                               size = 15, face = "bold"), nrow = 4),
+                 arrangeGrob(pt3, pt6, pt9, pt12, 
+                             top=ggpubr::text_grob(
+                               "Random NAs", 
+                               size = 15, face = "bold"), nrow = 4),
+                 ncol = 4, widths=c(1,4,4,4))
+    # grid.arrange(grobs=ptlist,ncol=length(ptlist)/4)
     
   })
 }
@@ -440,12 +492,13 @@ ui <- fluidPage(
                sliderInput(inputId ="q90", label = "Quantile where prob(NA) should be 90% (q90):",
                            min = 0, max = 1, step = 0.01,
                            value = 0.2),
-               sliderInput(inputId ="qSD", label = "SD to enable sample dependent q50 and q90:",
+               sliderInput(inputId ="qSD", label = "SD to enable sample-dependent q50 and q90:",
                            min = 0, max = 10, step = 0.1,
-                           value = 3),
+                           value = 1.5),
                sliderInput(inputId ="sdSamples", label = "SD of noise which affects each sample in the same way:",
                            min = 0, max = 10, step = 0.1,
-                           value = 0.5)
+                           value = 0.1),
+               checkboxInput("savePlots", "Save plots as files", FALSE),
               )
              ),
             accordion(
@@ -509,7 +562,7 @@ server <- shinyServer(function(input, output) {
       # })
 
       saveData(mtxs, seed)
-      generatePlots(mtxs, output, seed, savePlots = TRUE)
+      generatePlots(input, mtxs, output, seed)
     }
   )
 })
