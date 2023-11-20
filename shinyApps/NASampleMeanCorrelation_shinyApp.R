@@ -47,34 +47,34 @@ plotBoxplots <- function(mtx, plotTitle = "", plotSubtitle = "",
               aes(x = variable, y = value, group = 1), size = 0.8, color = "red") +
     geom_point(data = quantilesAll,
                aes(x = variable, y = value, group = 1), size = 0.5, color = "red") 
-
+  
   if (!is.null(yValueMin) & !is.null(yValueMax))
     gg <- gg + ylim(c(yValueMin, yValueMax))
-
+  
   print(gg)
 }
 
 plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "", 
                             ySampleMeanMin = NULL, ySampleMeanMax = NULL) {
-    colMeans <- colMeans(mtx.corr, na.rm = TRUE)
-    colNaPercentage <- colMeans(is.na(mtx.corr))*100
-    
-    corRes <- cor.test(colMeans, colNaPercentage, method = "spearman")
-    corrPlot <- ggplot(data.frame(colNaPercentage, colMeans), aes(colNaPercentage, colMeans)) +
-      geom_point() +
-      geom_smooth(method = "lm") +
-      # ggpubr::theme_pubr() +
-      theme_bw() +
-      labs(x = "NA Percentage in Sample", y = "Sample Mean") +
-      ggtitle(plotTitle, subtitle = plotSubtitle) +
-      xlim(0, 100) 
-    
-    if (!is.null(ySampleMeanMin) & !is.null(ySampleMeanMax))
-      corrPlot <- corrPlot + ylim(c(ySampleMeanMin, ySampleMeanMax))
-    
-    if (!is.na(corRes$p.value) & corRes$p.value < 0.05) corrPlot <- corrPlot + ggpubr::stat_cor(method = "spearman", label.x = 3)
-    
-    print(corrPlot)
+  colMeans <- colMeans(mtx.corr, na.rm = TRUE)
+  colNaPercentage <- colMeans(is.na(mtx.corr))*100
+  
+  corRes <- cor.test(colMeans, colNaPercentage, method = "spearman")
+  corrPlot <- ggplot(data.frame(colNaPercentage, colMeans), aes(colNaPercentage, colMeans)) +
+    geom_point() +
+    geom_smooth(method = "lm") +
+    # ggpubr::theme_pubr() +
+    theme_bw() +
+    labs(x = "NA Percentage in Sample", y = "Sample Mean") +
+    ggtitle(plotTitle, subtitle = plotSubtitle) +
+    xlim(0, 100) 
+  
+  if (!is.null(ySampleMeanMin) & !is.null(ySampleMeanMax))
+    corrPlot <- corrPlot + ylim(c(ySampleMeanMin, ySampleMeanMax))
+  
+  if (!is.na(corRes$p.value) & corRes$p.value < 0.05) corrPlot <- corrPlot + ggpubr::stat_cor(method = "spearman", label.x = 3)
+  
+  print(corrPlot)
 }
 
 
@@ -98,7 +98,7 @@ plotProbability <- function(mtx, plotTitle = "", plotSubtitle = "", withLegend =
   glmModel <- speedglm::speedglm(isNA ~ imputed + Sample, 
                                  family=binomial(link='logit'), 
                                  data = data.long, fitted = TRUE)
-
+  
   data.long$prob <- c(predict(glmModel, type="response"))
   
   
@@ -274,7 +274,7 @@ generateMatrices <- function(input, seed, saveParameters = TRUE) {
     paste0("q50: ", q50, "\nq90: ", q90, "\nqSD: ", qSD, "\nmean: ", mean, 
            "\nsd: ", sd, "\nsdSamples: ", sdSamples, "\nsdFeatures: ", sdFeatures), 
     paste0("parameters_Seed", seed, ".txt"))
- 
+  
   dat <- msb.simulateOmicsNormallyDistributed(nFeatures=n_metab, 
                                               nSamples=n_sample, 
                                               mean=mean, 
@@ -296,7 +296,7 @@ generateMatrices <- function(input, seed, saveParameters = TRUE) {
        dat.norm = runQuantileNormalization(dat2$dat),
        datThrNA.norm = runQuantileNormalization(dat2$datNA),
        datRandomNA.norm = runQuantileNormalization(datRandomNA)
-       )
+  )
 }
 
 saveData <- function(mtxs, seed){
@@ -387,22 +387,22 @@ generatePlots <- function(input, mtxs, output, seed) {
                            plotSubtitle = "Points correspond to data points")
     
     pt10 <- plotBoxplots(mtx = mtxs$dat.norm, 
-                        # plotTitle = "No NAs", 
-                        plotTitle = "", 
-                        plotSubtitle = "Red line/point indicates 90th percentile", 
-                        yValueMin = yValueMin.norm, yValueMax = yValueMax.norm)
+                         # plotTitle = "No NAs", 
+                         plotTitle = "", 
+                         plotSubtitle = "Red line/point indicates 90th percentile", 
+                         yValueMin = yValueMin.norm, yValueMax = yValueMax.norm)
     
     pt11 <- plotBoxplots(mtx = mtxs$datThrNA.norm, 
-                        # plotTitle = "Detection limit-related NAs", 
-                        plotTitle = "", 
-                        plotSubtitle = "Red line/point indicates 90th percentile", 
-                        yValueMin = yValueMin.norm, yValueMax = yValueMax.norm)
+                         # plotTitle = "Detection limit-related NAs", 
+                         plotTitle = "", 
+                         plotSubtitle = "Red line/point indicates 90th percentile", 
+                         yValueMin = yValueMin.norm, yValueMax = yValueMax.norm)
     
     pt12 <- plotBoxplots(mtx = mtxs$datRandomNA.norm, 
-                        # plotTitle = "Random NAs", 
-                        plotTitle = "", 
-                        plotSubtitle = "Red line/point indicates 90th percentile", 
-                        yValueMin = yValueMin.norm, yValueMax = yValueMax.norm)
+                         # plotTitle = "Random NAs", 
+                         plotTitle = "", 
+                         plotSubtitle = "Red line/point indicates 90th percentile", 
+                         yValueMin = yValueMin.norm, yValueMax = yValueMax.norm)
     
     
     ptlist <- list(pt1, pt2, pt3, pt4, pt5, pt6, pt7, pt8, pt9, pt10, pt11, pt12)
@@ -421,26 +421,26 @@ generatePlots <- function(input, mtxs, output, seed) {
     
     grid.arrange( arrangeGrob(grid::textGrob("Sample\ndistributions\n(unnormalized)",
                                              gp=grid::gpar(fontsize=10, fontface = "bold")),
-                   grid::textGrob(" NA Percentage vs.\nSample Mean\n(unnormalized)",
-                                  gp=grid::gpar(fontsize=10, fontface = "bold")),
-                   grid::textGrob("Intensity vs.\nNA Probability\n(unnormalized)",
-                                  gp=grid::gpar(fontsize=10, fontface = "bold")),
-                   grid::textGrob("Sample\ndistributions\n(normalized)",
-                                  gp=grid::gpar(fontsize=10, fontface = "bold")),
-                   nrow = 4),
-                 arrangeGrob(pt1, pt4, pt7, pt10, 
-                             top=ggpubr::text_grob(
-                               "No NAs", 
-                               size = 15, face = "bold"), nrow = 4), 
-                 arrangeGrob(pt2, pt5, pt8, pt11, 
-                             top=ggpubr::text_grob(
-                               "Sample-dependent detection limit-related NAs", 
-                               size = 15, face = "bold"), nrow = 4),
-                 arrangeGrob(pt3, pt6, pt9, pt12, 
-                             top=ggpubr::text_grob(
-                               "Random NAs", 
-                               size = 15, face = "bold"), nrow = 4),
-                 ncol = 4, widths=c(1,4,4,4))
+                              grid::textGrob(" NA Percentage vs.\nSample Mean\n(unnormalized)",
+                                             gp=grid::gpar(fontsize=10, fontface = "bold")),
+                              grid::textGrob("Intensity vs.\nNA Probability\n(unnormalized)",
+                                             gp=grid::gpar(fontsize=10, fontface = "bold")),
+                              grid::textGrob("Sample\ndistributions\n(normalized)",
+                                             gp=grid::gpar(fontsize=10, fontface = "bold")),
+                              nrow = 4),
+                  arrangeGrob(pt1, pt4, pt7, pt10, 
+                              top=ggpubr::text_grob(
+                                "No NAs", 
+                                size = 15, face = "bold"), nrow = 4), 
+                  arrangeGrob(pt2, pt5, pt8, pt11, 
+                              top=ggpubr::text_grob(
+                                "Sample-dependent detection limit-related NAs", 
+                                size = 15, face = "bold"), nrow = 4),
+                  arrangeGrob(pt3, pt6, pt9, pt12, 
+                              top=ggpubr::text_grob(
+                                "Random NAs", 
+                                size = 15, face = "bold"), nrow = 4),
+                  ncol = 4, widths=c(1,4,4,4))
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/4)
     
   })
@@ -471,80 +471,80 @@ ui <- fluidPage(
   ),
   
   
-    # # App title ----
-    titlePanel(""),
+  # # App title ----
+  titlePanel(""),
+  
+  # # Sidebar layout with input and output definitions ----
+  sidebarLayout(
     
-    # # Sidebar layout with input and output definitions ----
-    sidebarLayout(
+    # Sidebar panel for inputs ----
+    sidebarPanel(
+      tags$style(".well {background-color:white;}"),
+      accordion(
+        id = "accordion1",
+        accordionItem(
+          title = "Primary simulation parameters",
+          status = "danger",
+          collapsed = FALSE,
+          sliderInput(inputId ="q50", label = "Quantile where prob(NA) should be 50% (q50):",
+                      min = 0, max = 1, step = 0.01,
+                      value = 0.4),
+          sliderInput(inputId ="q90", label = "Quantile where prob(NA) should be 90% (q90):",
+                      min = 0, max = 1, step = 0.01,
+                      value = 0.2),
+          sliderInput(inputId ="qSD", label = "SD to enable sample-dependent q50 and q90:",
+                      min = 0, max = 10, step = 0.1,
+                      value = 1.5),
+          sliderInput(inputId ="sdSamples", label = "SD of noise which affects each sample in the same way:",
+                      min = 0, max = 10, step = 0.1,
+                      value = 0.1),
+          checkboxInput("savePlots", "Save plots as files", FALSE),
+        )
+      ),
+      accordion(
+        id = "accordion2",
+        accordionItem(
+          title = "Additional simulation parameters",
+          status = "warning",
+          collapsed = TRUE,
+          numericInput("n_sample", 
+                       label="# Samples:", 
+                       value = 20,  min = 1, max = 100,
+                       step = 1),
+          numericInput("n_metab", 
+                       label="# Analytes:", 
+                       value = 1000, min = 10, max = 4000,
+                       step = 1),
+          sliderInput(inputId ="mean", label = "Overall mean:",
+                      min = 0, max = 20,
+                      step = 0.5, 
+                      value = 12),
+          sliderInput(inputId ="sd", label = "SD of noise of each data point:",
+                      min = 1, max = 10,
+                      step = 0.5, 
+                      value = 1),
+          sliderInput(inputId ="sdFeatures", label = "SD of noise which affects each feature in the same way:",
+                      min = 0, max = 10,
+                      step = 0.5, 
+                      value = 2)
+        )
+      ),
+      actionButton(
+        inputId = "submit",
+        label = "Plot!"#,
+        #style="color: #fff; background-color: #337ab7; border-color: #2e6da4"
+      ),
+      width = 3),
+    # Main panel for displaying outputs ----
+    mainPanel(
+      conditionalPanel(
+        condition = "input.submit > 0",
+        style = "display: none;",
+        withSpinner(plotOutput(outputId="plotgraph", width="1100px",height="900px"), type = 5)
+      )
       
-         # Sidebar panel for inputs ----
-         sidebarPanel(
-           tags$style(".well {background-color:white;}"),
-           accordion(
-             id = "accordion1",
-             accordionItem(
-               title = "Primary simulation parameters",
-               status = "danger",
-               collapsed = FALSE,
-               sliderInput(inputId ="q50", label = "Quantile where prob(NA) should be 50% (q50):",
-                           min = 0, max = 1, step = 0.01,
-                           value = 0.4),
-               sliderInput(inputId ="q90", label = "Quantile where prob(NA) should be 90% (q90):",
-                           min = 0, max = 1, step = 0.01,
-                           value = 0.2),
-               sliderInput(inputId ="qSD", label = "SD to enable sample-dependent q50 and q90:",
-                           min = 0, max = 10, step = 0.1,
-                           value = 1.5),
-               sliderInput(inputId ="sdSamples", label = "SD of noise which affects each sample in the same way:",
-                           min = 0, max = 10, step = 0.1,
-                           value = 0.1),
-               checkboxInput("savePlots", "Save plots as files", FALSE),
-              )
-             ),
-            accordion(
-             id = "accordion2",
-             accordionItem(
-               title = "Additional simulation parameters",
-               status = "warning",
-               collapsed = TRUE,
-               numericInput("n_sample", 
-                            label="# Samples:", 
-                            value = 20,  min = 1, max = 100,
-                            step = 1),
-               numericInput("n_metab", 
-                            label="# Analytes:", 
-                            value = 1000, min = 10, max = 4000,
-                            step = 1),
-               sliderInput(inputId ="mean", label = "Overall mean:",
-                           min = 0, max = 20,
-                           step = 0.5, 
-                           value = 12),
-               sliderInput(inputId ="sd", label = "SD of noise of each data point:",
-                           min = 1, max = 10,
-                           step = 0.5, 
-                           value = 1),
-               sliderInput(inputId ="sdFeatures", label = "SD of noise which affects each feature in the same way:",
-                           min = 0, max = 10,
-                           step = 0.5, 
-                           value = 2)
-             )
-           ),
-           actionButton(
-             inputId = "submit",
-             label = "Plot!"#,
-             #style="color: #fff; background-color: #337ab7; border-color: #2e6da4"
-           ),
-         width = 3),
-         # Main panel for displaying outputs ----
-         mainPanel(
-           conditionalPanel(
-             condition = "input.submit > 0",
-             style = "display: none;",
-             withSpinner(plotOutput(outputId="plotgraph", width="1100px",height="900px"), type = 5)
-           )
-             
-          )
-))
+    )
+  ))
 
 
 server <- shinyServer(function(input, output) {
@@ -560,11 +560,16 @@ server <- shinyServer(function(input, output) {
       #     paste0(sprintf("%s", round(mtxs[[4]], 2)), collapse = "<br>")
       #   )
       # })
-
+      
       saveData(mtxs, seed)
       generatePlots(input, mtxs, output, seed)
+      
+      session <- sessionInfo()
+      sink(paste0("sessionInfo_Seed", seed, ".txt"))
+      print(session)
+      sink()
     }
   )
 })
-   
+
 shinyApp(ui, server)
