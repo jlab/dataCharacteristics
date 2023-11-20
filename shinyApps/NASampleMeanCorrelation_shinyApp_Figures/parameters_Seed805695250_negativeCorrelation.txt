@@ -1,0 +1,7 @@
+q50: 0.4
+q90: 0.2
+qSD: 0
+mean: 12
+sd: 1
+sdSamples: 0.6
+sdFeatures: 2
