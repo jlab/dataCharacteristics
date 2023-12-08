@@ -7,8 +7,6 @@ library(data.table)
 library(pcaMethods)
 library(Matrix)
 library(dplyr)
-# library(foreach)
-# library(BimodalIndex)
 library(ggplot2)
 theme_set(theme_bw())
 library(cluster)
@@ -34,8 +32,6 @@ options(spinner.color="#0275D8", spinner.color.background="#ffffff", spinner.siz
 removeEmptyRowsAndColumns <- function(mtx, zerosToNA = FALSE){
   if (zerosToNA) mtx[mtx == 0] <- NA
   mtx[mtx %in% c("NaN", "N/A", "<-->")] <- NA
-  # remove rows with only NAs
-  # mtx <- mtx[rowSums(is.na(mtx) | mtx == 0) != ncol(mtx), ]
   mtx <- subset(mtx, rowSums(is.na(mtx) | mtx == 0) != ncol(mtx))
   if (!is.vector(mtx)) mtx <- mtx[, colSums(is.na(mtx) | mtx == 0) != nrow(mtx)]
   mtx
@@ -70,11 +66,9 @@ calc_RMS <- function(data) sqrt(mean(data^2, na.rm=TRUE))
 
 applyFunctionWithSeed <- function(functionName, seed = 123,  ...){
   
-  #oldseed <- .Random.seed
   oldseed <- mlr3misc::get_seed()
   
   if (is.null(seed)) {
-    # seed <- .Random.seed
     seed <- mlr3misc::get_seed()
   }
   
@@ -91,7 +85,6 @@ get_rowMeans <- function(mtx, ...) return(apply(mtx, 1, mean, na.rm = TRUE))
 
 # row standard deviations
 get_rowSd <- function(mtx, ...) {
-  # return(apply(mtx,1,sd,na.rm=T))
   return(apply(mtx, 1, calc_sd))
 }
 
@@ -206,7 +199,6 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
 
 
 getCharacteristicsHelper <- function(mtx){
-  #KS.SignProp <- kolSmirTestSignProp(mtx)
   
   if (is.vector(mtx)){
     nFeatures <- 1
@@ -234,8 +226,6 @@ getCharacteristicsHelper <- function(mtx){
   try({variance <- calc_variance(mtx)})
   
   # Poly2 (features)
-  # try(linearCoefPoly2Row <- get_LinearCoefPoly2XRowMeansYRowVars(mtx))
-  # try(quadraticCoefPoly2Row <- get_QuadraticCoefPoly2XRowMeansYRowVars(mtx))
   try({
     coefs <- get_CoefPoly2XRowMeansYRowVars(mtx)
     linearCoefPoly2Row <- coefs[["linearCoef"]]
@@ -246,14 +236,12 @@ getCharacteristicsHelper <- function(mtx){
   try({
     coefHclustRowsRes <- get_coefHclustRowsWithFewestNAs(mtx, naToZero = TRUE)
     coefHclustRows <- coefHclustRowsRes$res
-    # coefHclustRowsSeed <- coefHclustRowsRes$seed
   })
   
   try({
     x5090.sds <- calculateIntensityNAProbability5090(mtx)
     intensityNAProb50.sd <- x5090.sds[["IntensityNAp50"]]
     intensityNAProb90.sd <- x5090.sds[["IntensityNAp90"]]
-    # intensityNAProbSeed <- x5090.sds[["seed"]]
     intensityNAProbnSamplesWithProbValue <- x5090.sds[["nSamplesWithProbValue"]]
   })
   
@@ -379,10 +367,6 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
   iris_dummy[is.na(iris_dummy)]<-7777 #swap out your NAs with a dummy number so prcomp will run
   pca.obj <- prcomp(iris_dummy, center=TRUE, scale.=TRUE)
   
-  # scale: One of "UV" (unit variance a=a/\sigma_{a}), 
-  # "vector" (vector normalisation b=b/|b|), 
-  # "pareto" (sqrt UV) or "none" 
-  # to indicate which scaling should be used to scale the matrix with aa variables and b samples. 
   pca.obj2 <- pcaMethods::pca(df, method=pcaMethod, nPcs=4, center=TRUE
                               , scale = "uv"
   )
@@ -405,7 +389,6 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
                            var.axes=T,
                            groups=groups, 
                            alpha=0)  +
-    # scale_color_discrete(name = '') +  
     coord_fixed(ratio = coordRatio)
   
   if (facetZoom) {
@@ -456,19 +439,16 @@ plot3DPCA <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals") 
   fig <- plotly::plot_ly(dat.woNewDataset, x = ~PC1, y = ~PC2, z = ~PC3,
                  color = ~as.factor(dat.woNewDataset[[groupColName]]),
                  type="scatter3d", mode="markers",
-                 #colors = c('#636EFA','#EF553B') ,
                  marker = list(size = 3, opacity = 0.5),
                  hovertext = paste("Dataset ID :", dat.woNewDataset$Row.names)
                  # , alpha = 0.75
-  ) #%>%
-  # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
+  ) 
+  
   fig <- fig %>%
     plotly::layout(
       hoverlabel = list(namelength = -1),
       legend = list(itemsizing = "constant")
     )
-
- #  htmlwidgets::saveWidget(fig, paste0("plotly_", pcaMethod, "_", addStr,".html"), selfcontained = F, libdir = "lib")
   
   newDataset <- dat[dat$Row.names == "newDataset",]
   fig <- plotly::add_trace(fig, 
@@ -480,19 +460,12 @@ plot3DPCA <- function(df, groupColName = "", addStr = "", pcaMethod = "nipals") 
   
   
   fig
-  
-  
-  # library(scatterplot3d)
-  # library(rgl)
-  # car::scatter3d(x = dat$PC1, y = dat$PC2, z = dat$PC3, groups = as.factor(dat[[groupColName]]),
-  #           surface=FALSE, ellipsoid = TRUE)
 }
 
 
 integrateNewDataset <- function(mtx) {
   data <- getDataCharacteristics(mtx)
   data <- data.frame(as.list(data))
-  
   
   data$prctPC1 <- 100 * data$prctPC1
   data$prctPC2 <- 100 * data$prctPC2
@@ -503,8 +476,6 @@ integrateNewDataset <- function(mtx) {
     dplyr::select(-c(nDistinctValues, nNegativeNumbers))
   
   data$datasetID <- data$dataType <- data$dataTypeSubgroups <- "newDataset"
-  # seedCols <- c("coefHclustRowsSeed", "intensityNAProbSeed")
-  # data <- data[,!(colnames(data) %in% seedCols)]
   
   Oldnames <- c("datasetID", "dataType", "dataTypeSubgroups", "nSamples", "nAnalytes", "minRowNaPercentage", 
                 "maxRowNaPercentage", "minColNaPercentage", "maxColNaPercentage", 
@@ -542,9 +513,7 @@ integrateNewDataset <- function(mtx) {
   data <- data %>% dplyr::rename_with(~ Newnames[which(Oldnames == .x)], .cols = Oldnames)
   data <- data %>% dplyr::mutate(`|Skewness|` = abs(Skewness))
   
-  
-  
-  data.allDatasets <-  read.csv("/Users/ebrombacher/Documents/PhD/dataCharacteristics_WiP/datasets_results_clean_renamed.csv", check.names = FALSE)
+  data.allDatasets <-  read.csv("datasets_results_clean_renamed.csv", check.names = FALSE)
   data.allDatasets$`Corr(Mean vs. % NA) (Samples) (p-Value)` <- 
     data.allDatasets$`Corr(Mean vs. % NA) (Analytes) (p-Value)` <-
     data.allDatasets$`Bimodality of sample correlations` <- NULL
@@ -556,25 +525,12 @@ integrateNewDataset <- function(mtx) {
 plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "", 
                             ySampleMeanMin = NULL, ySampleMeanMax = NULL) {
   colMeans <- colMeans(mtx.corr, na.rm = TRUE)
-  colNaPercentage <- colMeans(is.na(mtx.corr))*100
-  # corrPlot <- ggscatter(data.frame(colNaPercentage, colMeans), x = "colNaPercentage", y = "colMeans",
-  #     title = plotTitle,
-  #     subtitle =  plotSubtitle,
-  #     xlab = "NA Percentage",
-  #     ylab= "Sample Mean",
-  #     add = "reg.line",                                 # Add regression line
-  #     conf.int = TRUE,                                  # Add confidence interval
-  #     add.params = list(color = "blue",
-  #         fill = "lightgray")) +
-  #     stat_cor(method = "spearman", label.x = 3) + # Add correlation coefficient
-  #     xlim(0, 100) +
-  #     theme(plot.title = element_text(margin = margin(10, 0, 10, 0)))
+  colNaPercentage <- colMeans(is.na(mtx.corr)) * 100
   
   corRes <- cor.test(colMeans, colNaPercentage, method = "spearman")
   corrPlot <- ggplot(data.frame(colNaPercentage, colMeans), aes(colNaPercentage, colMeans)) +
     geom_point(alpha = 0.5) +
     geom_smooth(method = "lm") +
-    # ggpubr::theme_pubr() +
     theme_bw() +
     labs(x = "%NA in sample", y = "Sample mean") +
     ggtitle(plotTitle, subtitle = plotSubtitle) +
@@ -590,8 +546,6 @@ plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "",
 
 
 getUMAPNewDataset <- function(df, groupColName = "") {
-  
-  # iris.umap <- umap(df %>% dplyr::select(-!!groupColName) %>% dplyr::select_if(~ !any(is.na(.))))
   set.seed(142)
   umap_fit <- df %>% dplyr::mutate(ID=row_number())  %>% dplyr::select(-!!groupColName) %>% dplyr::select_if(~ !any(is.na(.))) %>%
     remove_rownames() %>% column_to_rownames("ID") %>%
@@ -604,16 +558,13 @@ getUMAPNewDataset <- function(df, groupColName = "") {
     dplyr::rename(UMAP1="V1",
                   UMAP2="V2",
                   UMAP3="V3") %>%
-    dplyr::mutate(!!groupColName := !!groupVec) # %>%
-  # mutate(dataType=!!groupVec) # %>%
-  # inner_join(penguins_meta, by="ID")
+    dplyr::mutate(!!groupColName := !!groupVec) 
   row.names(umap_df) <- row.names(df)
   
   dat.woNewDataset <- umap_df %>% dplyr::filter(!!as.name(groupColName) != "newDataset")
   fig <- plotly::plot_ly(dat.woNewDataset, x = ~UMAP1, y = ~UMAP2, z = ~UMAP3,
                          color = ~as.factor(dat.woNewDataset[[groupColName]]),
                          type="scatter3d", mode="markers",
-                         #colors = c('#636EFA','#EF553B') ,
                          marker = list(size = 3, opacity = 0.5),
                          hovertext = paste("Dataset ID :", row.names(dat.woNewDataset))
   ) 
@@ -643,13 +594,6 @@ generatePlots <- function(input, output) {
   req(input$file1)
   
   # Example file: "DIANN_DIANN_AI_GPF_example.csv"
-  # mtx <- read.csv(input$file1$datapath,
-  #                 header = input$header,
-  #                 sep = input$sep,
-  #                 quote = input$quote,
-  #                 check.names = FALSE)
-  
-  # path <- "/Users/ebrombacher/Documents/PhD/dataCharacteristics_WiP/DIANN_DIANN_AI_GPF_example.csv"
   mtx <- data.table::fread(input$file1$datapath,
                            header = input$header,
                            data.table = FALSE,
@@ -687,10 +631,6 @@ generatePlots <- function(input, output) {
                                   "sd(Intensity w/ prob(NA) = 50% for sample)", 
                                   "sd(Intensity w/ prob(NA) = 90% for sample)")), c("Data type", "Dataset ID"))
   
-  # row.names(data) <- data$`Dataset ID`
-  # data2 <- data[, c("Data type", 
-  #                   boxplotCols)]
-  
   data2 <- data %>% column_to_rownames("Dataset ID") %>% dplyr::select(c("Data type", !!boxplotCols))
   
   # To be log2-transformed:
@@ -726,14 +666,9 @@ generatePlots <- function(input, output) {
   
   gg.biplot <- getPCABiplotsNewDataset(df = df, 
                                        groupColName = groupColName)
-  
   plotlyUMAP <- getUMAPNewDataset(df, groupColName = groupColName)
-
-  
   selectedDataType <- input$omicsTypes # "Proteomics (LFQ, PRIDE)"
-  
   boxplot.df <- df %>% filter(`Data type` == !!selectedDataType)
-  
   
   boxplot.df.long <- reshape2::melt(boxplot.df)
   lev <- c("log2(# Analytes)", "log2(# Samples)", 
@@ -753,7 +688,6 @@ generatePlots <- function(input, output) {
            "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)"
   )
   
-  
   newDatasetValues <- df %>% filter(`Data type` == "newDataset") %>% t() %>% as.data.frame()
   newDatasetValues <- tibble::rownames_to_column(newDatasetValues, "variable") %>% 
     filter(variable != "Data type")
@@ -768,24 +702,12 @@ generatePlots <- function(input, output) {
     (newDatasetValues$value >= newDatasetValues$X5.) &
       (newDatasetValues$value <= newDatasetValues$X95.), 'green', 'red')
   
-  # library(Rmisc)
-  # ci.df <- data.frame(t(sapply(boxplot.df[, 2:ncol(boxplot.df)],
-  #                              function(x) Rmisc::CI(x[!is.na(x)], ci = 0.95) )))
-  # ci.df$variable <- row.names(ci.df)
-  # newDatasetValues <- dplyr::left_join(newDatasetValues, ci.df, by = "variable")
-  # newDatasetValues$included <- ifelse(
-  #   (newDatasetValues$value >= newDatasetValues$lower) & 
-  #     (newDatasetValues$value <= newDatasetValues$upper), 'green', 'red')
-  
-  # print("Plotting")
-  # pdf("blub.pdf", height = 10, width = 10)
   gg.boxplot <- ggplot(boxplot.df.long, aes(x = value, y = factor(1))) +
     geom_violin(alpha=0.5) +
     geom_boxplot(width=0.5, alpha=0.25, outlier.size=0.5) +
     geom_rect(data = newDatasetValues, aes(fill = factor(included, levels = c('red', 'green'))), xmin = -Inf, xmax = Inf,
               ymin = -Inf, ymax = Inf, alpha = 0.3) +
     geom_vline(data=newDatasetValues, aes(xintercept=as.numeric(value)), colour = 'blue') +
-    # geom_hline(aes(yintercept = value), newDatasetValues, colour = 'blue') +
     facet_wrap(. ~ factor(variable, levels=lev), ncol = 4, scales = "free_x") +
     ggplot2::theme_bw() +
     theme(axis.title = element_blank(),
@@ -852,8 +774,7 @@ ui <- fluidPage(
       
       actionButton(
         inputId = "submit",
-        label = "Submit"#,
-        #style="color: #fff; background-color: #337ab7; border-color: #2e6da4"
+        label = "Submit"
       ),
       
       # Horizontal line ----
@@ -863,20 +784,6 @@ ui <- fluidPage(
       checkboxInput("header", "Header", TRUE),
       
       checkboxInput("firstColumnRownames", "First column contains row names", TRUE),
-      
-      # # Input: Select separator ----
-      # radioButtons("sep", "Separator",
-      #              choices = c(Comma = ",",
-      #                          Semicolon = ";",
-      #                          Tab = "\t"),
-      #              selected = ","),
-      # 
-      # # Input: Select quotes ----
-      # radioButtons("quote", "Quote",
-      #              choices = c(None = "",
-      #                          "Double Quote" = '"',
-      #                          "Single Quote" = "'"),
-      #              selected = '"'),
 
       # Horizontal line ----
       tags$hr(),
@@ -898,8 +805,6 @@ ui <- fluidPage(
       conditionalPanel(
         condition = "input.submit > 0",
         style = "display: none;",
-        # withSpinner(plotOutput(outputId="plotgraph", width="1100px",height="900px"), type = 5)
-        # rglwidgetOutput("graph",  width = 1100, height = 600),
         h2("Data characteristics:"),
         withSpinner(htmlOutput(outputId="dataCharacteristics"), type = 5),
         hr(),
@@ -911,15 +816,12 @@ ui <- fluidPage(
         withSpinner(plotlyOutput('plotlyPCA', width="1100px",height="500px"), type = 5),
         hr(),
         h2("UMAP"),
-        # withSpinner(plotOutput(outputId="biplot", width="1100px",height="500px"), type = 5),
         withSpinner(plotlyOutput('plotlyUMAP', width="1100px",height="600px"), type = 5),
         hr(),
         h2("Sample mean vs. %NA for provided dataset"),
         withSpinner(plotOutput(outputId="correlationplot", width="1100px",height="500px"), type = 5)
       ) 
-      
     )
-    
   )
 )
 
@@ -952,20 +854,11 @@ server <- function(input, output) {
         print(plots[["gg.boxplot"]])
       })
       
-      # output$graph <- renderRglwidget({
-      #   rgl.open(useNULL=T)
-      #   plots[["plotlyplot"]]
-      #   rglwidget()
-      # })
-      
       output$dataCharacteristics <- renderUI({
         HTML(plots[["df.newDatasetOnly.vec"]])
       })
-
-
     }
   )
-  
 }
 # Run the app ----
 shinyApp(ui, server)
