@@ -1,6 +1,6 @@
 library(shiny)
 
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 ##########################################################################################
 library(data.table)
