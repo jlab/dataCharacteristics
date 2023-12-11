@@ -1,7 +1,4 @@
 
-# Inspired by Reisetter, "Mixture model normalization for non-targeted gas chromatography/mass
-# spectrometry metabolomics data", 2017
-
 library(shiny)
 library(ggplot2)
 library(ggpubr)
