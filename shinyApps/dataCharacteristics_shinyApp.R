@@ -24,6 +24,9 @@ library(shinydashboardPlus)
 library(ggpubr)
 library(umap)
 
+# devtools::install_github("vqv/ggbiplot")
+library(ggbiplot)
+
 library(shinycssloaders)
 options(spinner.color="#0275D8", spinner.color.background="#ffffff", spinner.size=2)
 
@@ -359,10 +362,7 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
                                     PCchoices = 1:2,
                                     ellipse = TRUE) {
   # See https://stackoverflow.com/a/49788251
-  #   # devtools::install_github("vqv/ggbiplot")
-  
-  library(ggbiplot)
-  
+
   iris_dummy<-df
   iris_dummy[is.na(iris_dummy)]<-7777 #swap out your NAs with a dummy number so prcomp will run
   pca.obj <- prcomp(iris_dummy, center=TRUE, scale.=TRUE)
