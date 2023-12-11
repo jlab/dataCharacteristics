@@ -55,14 +55,20 @@ plotBoxplots <- function(data2.long, fileNameAddition = "", height=12, width=18)
     xlab("") +
     ylab("") +
     geom_hline(aes(yintercept = medianValue), medianValues, colour = 'red') +
-    facet_wrap( ~ variable, scales = "free_x", ncol=6, strip.position = "bottom") +
+    facet_wrap( ~ variable, scales = "free_x", ncol=6, 
+                strip.position = "bottom", 
+                labeller = ggplot2::label_wrap_gen(width = 30)) +
     ggplot2::theme_bw() +
-    theme(panel.spacing.y=unit(1.5, "lines"),
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.spacing.y=unit(0.5, "lines"),
           legend.title = element_blank(), axis.text.y = element_text(hjust=0, face = "bold"), 
           # legend.position="bottom",
           legend.position = "none",
           legend.justification = "left", legend.direction = "horizontal",
-          strip.text = element_text(face="bold", size = 6),
+          strip.text = element_text(face="bold",
+                                    vjust = 1#, size = 6
+                                    ),
           strip.placement = "outside",                      # Place facet labels outside x axis labels.
           strip.background = element_blank(),  # Make facet label background white.
           axis.title = element_blank()) +     
@@ -766,11 +772,11 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   write.csv(numberOfDatasetsIncluded, paste0("numberOfDatasetsIncluded_", selectedDataTypeLevel, ".csv"), row.names = FALSE)
   
   if (selectedDataTypeLevel == "Data type") {
-    height <- 12
-    width <- 18
+    height <- 14# 12
+    width <- 14# 18
   } else {
-    height <- 22
-    width <- 19
+    height <- 21
+    width <- 15
   }
   
   plotBoxplots(data2.long, fileNameAddition = paste0("_allDataTypes_", gsub(" ", "_", selectedDataTypeLevel)), height = height, width = width)
