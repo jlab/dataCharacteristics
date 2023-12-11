@@ -254,10 +254,10 @@ runQuantileNormalization <- function(mtx){
 }
 
 
-generateMatrices <- function(input, seed, saveParameters = TRUE) {
+generateMatrices <- function(input, seed, saveParameters = FALSE) {
   
-  n_sample <- input$n_sample #30
-  n_metab <- input$n_metab  #3000
+  nSamples <- input$nSamples #30
+  nAnalytes <- input$nAnalytes  #3000
   
   q50 <- input$q50 # 0.2
   q90 <- input$q90 # 0.1
@@ -268,12 +268,14 @@ generateMatrices <- function(input, seed, saveParameters = TRUE) {
   sdFeatures <- input$sdFeatures # 2
   
   if (saveParameters) writeLines(
-    paste0("q50: ", q50, "\nq90: ", q90, "\nqSD: ", qSD, "\nmean: ", mean, 
+    paste0("nSamples: ", nSamples,
+           "\nnAnalytes: ", nAnalytes, 
+      "\nq50: ", q50, "\nq90: ", q90, "\nqSD: ", qSD, "\nmean: ", mean, 
            "\nsd: ", sd, "\nsdSamples: ", sdSamples, "\nsdFeatures: ", sdFeatures), 
     paste0("parameters_Seed", seed, ".txt"))
   
-  dat <- msb.simulateOmicsNormallyDistributed(nFeatures=n_metab, 
-                                              nSamples=n_sample, 
+  dat <- msb.simulateOmicsNormallyDistributed(nFeatures=nAnalytes, 
+                                              nSamples=nSamples, 
                                               mean=mean, 
                                               sd = sd,
                                               sdSamples = sdSamples, 
@@ -296,22 +298,22 @@ generateMatrices <- function(input, seed, saveParameters = TRUE) {
   )
 }
 
-saveData <- function(mtxs, seed){
-  saveRDS(mtxs,file=paste0("dataMatrices_Seed", seed, ".RDS"))
-}
-
-savePlots <- function(ptlist, seed){
-  for (i in seq(length(ptlist))){
-    ggsave(filename = paste0(names(ptlist)[i], "_Seed", seed, ".pdf"), 
-           plot = ptlist[[i]],
-           width = 5,
-           height = 4)
-  }
-}
+# saveData <- function(mtxs, seed){
+#   saveRDS(mtxs,file=paste0("dataMatrices_Seed", seed, ".RDS"))
+# }
+# 
+# savePlots <- function(ptlist, seed){
+#   for (i in seq(length(ptlist))){
+#     ggsave(filename = paste0(names(ptlist)[i], "_Seed", seed, ".pdf"), 
+#            plot = ptlist[[i]],
+#            width = 5,
+#            height = 4)
+#   }
+# }
 
 generatePlots <- function(input, mtxs, output, seed) {
   
-  savePlots <- input$savePlots
+  # savePlots <- input$savePlots
   yValueMin <- min(c(c(mtxs$dat), c(mtxs$datThrNA), c(mtxs$datRandomNA)), na.rm = TRUE)
   yValueMax <- max(c(c(mtxs$dat), c(mtxs$datThrNA), c(mtxs$datRandomNA)), na.rm = TRUE)
   
@@ -411,7 +413,7 @@ generatePlots <- function(input, mtxs, output, seed) {
     ptlist <- ptlist[to_delete] 
     if (length(ptlist)==0) return(NULL)
     
-    if (savePlots) savePlots(ptlist, seed)
+    # if (savePlots) savePlots(ptlist, seed)
     
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/2, nrow = 2)
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/3, nrow = 3)
@@ -495,7 +497,7 @@ ui <- fluidPage(
           sliderInput(inputId ="sdSamples", label = "SD of noise which affects each sample in the same way:",
                       min = 0, max = 10, step = 0.1,
                       value = 0.1),
-          checkboxInput("savePlots", "Save plots as files", FALSE),
+          # checkboxInput("savePlots", "Save plots as files", FALSE),
         )
       ),
       accordion(
@@ -504,14 +506,14 @@ ui <- fluidPage(
           title = "Additional simulation parameters",
           status = "warning",
           collapsed = TRUE,
-          numericInput("n_sample", 
-                       label="# Samples:", 
-                       value = 20,  min = 1, max = 100,
-                       step = 1),
-          numericInput("n_metab", 
-                       label="# Analytes:", 
-                       value = 1000, min = 10, max = 4000,
-                       step = 1),
+          sliderInput(inputId ="nSamples", 
+                      label="# Samples:",
+                     min = 5, max = 50, step = 1,
+                     value = 20),
+          sliderInput(inputId = "nAnalytes", 
+                      label="# Analytes:", 
+                      min = 100, max = 4000, step = 100,
+                      value = 1000),
           sliderInput(inputId ="mean", label = "Overall mean:",
                       min = 0, max = 20,
                       step = 0.5, 
@@ -558,13 +560,13 @@ server <- shinyServer(function(input, output) {
       #   )
       # })
       
-      saveData(mtxs, seed)
+      # saveData(mtxs, seed)
       generatePlots(input, mtxs, output, seed)
       
-      session <- sessionInfo()
-      sink(paste0("sessionInfo_Seed", seed, ".txt"))
-      print(session)
-      sink()
+      # session <- sessionInfo()
+      # sink(paste0("sessionInfo_Seed", seed, ".txt"))
+      # print(session)
+      # sink()
     }
   )
 })
