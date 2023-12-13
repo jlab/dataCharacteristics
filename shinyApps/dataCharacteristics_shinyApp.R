@@ -154,6 +154,8 @@ get_coefHclustRowsWithFewestNAs <- function(mtx, naToZero = FALSE,
 }
 
 calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
+  if (nrow(mtx) > 1000)
+    mtx <- mtx[sample(1:nrow(mtx), 1000),] # downsampling in order to decrease RAM usage
   
   seedUsed <- NA
   if (ncol(mtx) > nmaxSamples) { # random subset of features are selected
@@ -166,6 +168,7 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
   
   data.long <- reshape2::melt(mtx)
   mtx <- NULL
+  gc()
   colnames(data.long) <- c("Feature", "Sample", "Value")
   data.long$isNA <- as.integer(is.na(data.long$Value))
   
@@ -202,6 +205,7 @@ calculateIntensityNAProbability5090 <- function(mtx, nmaxSamples = 200) {
   })
   
   data.long <- NULL
+  gc()
   
   x5090.df <- data.frame(do.call(rbind, x5090.lst))
   colnames(x5090.df) <- c("IntensityNAp50", "IntensityNAp90")
@@ -275,6 +279,11 @@ getCharacteristicsHelper <- function(mtx){
   
   if (!is.vector(mtx)) {
     try({
+      if (nrow(mtx) > 1000)
+        mtx <- mtx[sample(1:nrow(mtx), 1000),] # downsampling in order to decrease RAM usage
+      if (ncol(mtx) > 1000)
+        mtx <- mtx[, sample(1:ncol(mtx), 1000)] # downsampling in order to decrease RAM usage
+      
       pca <- pcaMethods::pca(mtx, method = "nipals", center = TRUE, 
                              maxSteps = 5000)
       prctPC1 <- pca@R2[1]
@@ -283,6 +292,7 @@ getCharacteristicsHelper <- function(mtx){
   }
   
   mtx <- NULL
+  gc()
   resultvec <- c(
     mean = mean,
     median = median,
@@ -331,6 +341,7 @@ getNaFeatures <- function(mtx) {
   percOfColsWithNAs <- sum(apply(mtx, 2, anyNA))/ncol(mtx) * 100
   
   mtx <- NULL
+  gc()
   c(
     minRowNaPercentage = min(rowNaPercentage),            
     maxRowNaPercentage = max(rowNaPercentage),
@@ -363,7 +374,7 @@ getDataCharacteristics <- function(mtx) {
   
   characts <- getCharacteristicsHelper(mtx)
   mtx <- NULL
-  
+  gc()
   charact.log <- c(naFeatures, characts, nDistinctValues = nDistinctValues, 
                    nNegativeNumbers = nNegativeNumbers)
   
@@ -397,11 +408,11 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
   pca.obj <- prcomp(iris_dummy, center = TRUE, scale.=TRUE)
   
   iris_dummy <- NULL
-  
+  gc()
   pca.obj2 <- pcaMethods::pca(df, method = pcaMethod, nPcs = 4, center = TRUE, 
                               scale = "uv")
   df <- NULL
-  
+  gc()
   pca.obj$x <- pca.obj2@scores 
   pca.obj$rotation <- pca.obj2@loadings 
   pca.obj$sdev <- pca.obj2@sDev
@@ -409,7 +420,7 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
   pca.obj$scale <- pca.obj2@scale
   
   pca.obj2 <- NULL
-  
+  gc()
   cond <- pca.obj$x[which(groups == "newDataset"),]
   
   P2 <- ggbiplot::ggbiplot(pca.obj,
@@ -425,7 +436,7 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
     coord_fixed(ratio = coordRatio)
   
   pca.obj <- NULL
-  
+  gc()
   if (facetZoom) {
     P2 <- P2 + ggforce::facet_zoom(xlim = c(xlimLower, xlimUpper), 
                                    ylim = c(ylimLower, ylimUpper))
@@ -464,12 +475,12 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
                          , scale = "uv")
   dat <- merge(pcaMethods::scores(pca), df, by = 0)
   df <- NULL
-  
+  gc()
   # library(htmlwidgets)
   dat.woNewDataset <- dat %>% dplyr::filter(Row.names != "newDataset")
   newDataset <- dat[dat$Row.names == "newDataset",]
   dat <- NULL
-  
+  gc()
   fig <- plotly::plot_ly(dat.woNewDataset, x = ~PC1, y = ~PC2, z = ~PC3,
                          color = ~as.factor(dat.woNewDataset[[groupColName]]),
                          type="scatter3d", mode="markers",
@@ -500,6 +511,7 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
 integrateNewDataset <- function(mtx) {
   data <- getDataCharacteristics(mtx)
   mtx <- NULL
+  gc()
   data <- data.frame(as.list(data))
   
   data$prctPC1 <- 100 * data$prctPC1
@@ -570,6 +582,7 @@ integrateNewDataset <- function(mtx) {
   data.allDatasets <- rbind(data.allDatasets, data)
   
   data <- NULL
+  gc()
   data.allDatasets
 }
 
@@ -579,6 +592,7 @@ plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "",
   colNaPercentage <- colMeans(is.na(mtx.corr)) * 100
   
   mtx.corr <- NULL
+  gc()
   corRes <- cor.test(colMeans, colNaPercentage, method = "spearman")
   corrPlot <- ggplot(data.frame(colNaPercentage, colMeans), 
                      aes(colNaPercentage, colMeans)) +
@@ -611,6 +625,7 @@ getUMAPNewDataset <- function(df, groupColName = "") {
     umap::umap(n_components = 3)
   
   df <- NULL
+  gc()
   
   umap_df <- umap_fit$layout %>%
     as.data.frame()%>%
@@ -665,6 +680,7 @@ generatePlots <- function(mtx, output, omicsTypes){
     dplyr::rename("Data type" = !!selectedDataTypeLevel)
   
   mtx <- NULL
+  gc()
   
   data <- data[!(
     data$`Data type` %in% c("Metabolomics (Undefined-MS)",
@@ -744,6 +760,7 @@ generatePlots <- function(mtx, output, omicsTypes){
   boxplot.df <- data %>% filter(`Data type` == !!selectedDataType)
   
   data <- NULL
+  gc()
   
   boxplot.df.long <- reshape2::melt(boxplot.df)
   lev <- c("log2(# Analytes)", "log2(# Samples)", 
