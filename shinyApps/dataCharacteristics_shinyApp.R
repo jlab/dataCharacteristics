@@ -794,7 +794,7 @@ ui <- fluidPage(
     sidebarPanel(
       title = "Inputs",
       fileInput("csv_input", 
-                "Select CSV File to Import (Format: Samples in columns and analytes in rows)",
+                "Select CSV File to Import (Format: samples in columns and analytes in rows, max. 1 GB)",
                 accept = c("text/csv",
                            "text/comma-separated-values,text/plain",
                            ".csv")),
