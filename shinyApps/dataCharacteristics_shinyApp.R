@@ -319,20 +319,19 @@ getCharacteristicsHelper <- function(mtx){
 getNaFeatures <- function(mtx) {
   colNaPercentage <- colMeans(is.na(mtx))*100
   rowNaPercentage <- rowMeans(is.na(mtx))*100
-  rowNonNaNumber <- rowSums(!is.na(mtx))
   
-  colMeans <- colMeans(mtx, na.rm = TRUE)
-  rowMeans <- rowMeans(mtx, na.rm = TRUE)
+  colMeans2 <- colMeans(mtx, na.rm = TRUE)
+  rowMeans2 <- rowMeans(mtx, na.rm = TRUE)
   
   corSampleMeanNA <- corAnalyteMeanNA <- NA
   corCoefType <- "spearman"
   try({
-    cortestCol <- cor.test(colNaPercentage, colMeans, method = corCoefType)
+    cortestCol <- cor.test(colNaPercentage, colMeans2, method = corCoefType)
     corSampleMeanNA <- unname(cortestCol$estimate)
   })
   
   try({
-    cortestRow <- cor.test(rowNaPercentage, rowMeans, method = corCoefType)
+    cortestRow <- cor.test(rowNaPercentage, rowMeans2, method = corCoefType)
     corAnalyteMeanNA <- unname(cortestRow$estimate)
   })
   
@@ -340,8 +339,8 @@ getNaFeatures <- function(mtx) {
   percOfRowsWithNAs <- sum(apply(mtx, 1, anyNA))/nrow(mtx) * 100
   percOfColsWithNAs <- sum(apply(mtx, 2, anyNA))/ncol(mtx) * 100
   
-  mtx <- NULL
-  gc()
+  # mtx <- NULL
+  # gc()
   c(
     minRowNaPercentage = min(rowNaPercentage),            
     maxRowNaPercentage = max(rowNaPercentage),
@@ -371,6 +370,7 @@ getDataCharacteristics <- function(mtx) {
   
   nDistinctValues <- length(unique(c(mtx[!is.na(mtx)])))
   naFeatures <- getNaFeatures(mtx)
+  gc()
   
   characts <- getCharacteristicsHelper(mtx)
   mtx <- NULL
@@ -509,9 +509,40 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
 }
 
 integrateNewDataset <- function(mtx) {
-  data <- getDataCharacteristics(mtx)
+  # data <- getDataCharacteristics(mtx)
+  
+  ##############################
+  # getDataCharacteristics()
+  # mtx[mtx == 0] <- NA
+  # mtx[mtx == Inf] <- NA
+  # mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
+  
+  nSamples <- ncol(mtx)
+  nAnalytes <- nrow(mtx)
+  
+  nNegativeNumbers <- sum(mtx < 0, na.rm = TRUE)
+  mtx <- log2(mtx)
+  mtx[mtx == "NaN"] <- NA
+  
+  nDistinctValues <- length(unique(c(mtx[!is.na(mtx)])))
+  naFeatures <- getNaFeatures(mtx)
+  gc()
+  
+  characts <- getCharacteristicsHelper(mtx)
   mtx <- NULL
   gc()
+  charact.log <- c(naFeatures, characts, nDistinctValues = nDistinctValues, 
+                   nNegativeNumbers = nNegativeNumbers)
+  
+  data <- c(nSamples = nSamples, 
+           nAnalytes = nAnalytes,
+           # charact.noLog, 
+           charact.log)
+  
+  ##############################
+  
+  # mtx <- NULL
+  # gc()
   data <- data.frame(as.list(data))
   
   data$prctPC1 <- 100 * data$prctPC1
@@ -588,14 +619,15 @@ integrateNewDataset <- function(mtx) {
 
 plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "", 
                             ySampleMeanMin = NULL, ySampleMeanMax = NULL) {
-  colMeans <- colMeans(mtx.corr, na.rm = TRUE)
+  colMeans2 <- colMeans(mtx.corr, na.rm = TRUE)
+  gc()
   colNaPercentage <- colMeans(is.na(mtx.corr)) * 100
   
-  mtx.corr <- NULL
-  gc()
-  corRes <- cor.test(colMeans, colNaPercentage, method = "spearman")
-  corrPlot <- ggplot(data.frame(colNaPercentage, colMeans), 
-                     aes(colNaPercentage, colMeans)) +
+  #mtx.corr <- NULL
+  #gc()
+  corRes <- cor.test(colMeans2, colNaPercentage, method = "spearman")
+  corrPlot <- ggplot(data.frame(colNaPercentage, colMeans2), 
+                     aes(colNaPercentage, colMeans2)) +
     geom_point(alpha = 0.5) +
     geom_smooth(method = "lm") +
     theme_bw() +
@@ -664,21 +696,19 @@ getUMAPNewDataset <- function(df, groupColName = "") {
 
 generatePlots <- function(mtx, output, omicsTypes){
   
-  # input$file1 will be NULL initially. After the user selects
-  # and uploads a file, head of that data file by default,
-  # or all rows if selected, will be shown.
+  mtx[mtx == 0] <- NA
+  mtx[mtx == Inf] <- NA
+  mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
   
   allDataTypeLevels <- c("Data type", "Data type subgroups")
   selectedDataTypeLevel <- "Data type"
   
-  
-  # data.allDatasets <- integrateNewDataset(mtx)
   correlationplot <- plotCorrelation(mtx)
+  gc()
 
   data <- integrateNewDataset(mtx) %>% dplyr::select(-setdiff(!!allDataTypeLevels, 
                                                !!selectedDataTypeLevel)) %>% 
     dplyr::rename("Data type" = !!selectedDataTypeLevel)
-  
   mtx <- NULL
   gc()
   
@@ -813,6 +843,8 @@ generatePlots <- function(mtx, output, omicsTypes){
           axis.ticks.y=element_blank(),
           legend.position = "none")
   
+  gc()
+  
   list(plotlyUMAP = plotlyUMAP,
        gg.boxplot = gg.boxplot, 
        plotlyPCA = plotlyPCA,
@@ -826,7 +858,7 @@ ui <- fluidPage(
     sidebarPanel(
       title = "Inputs",
       fileInput("csv_input", 
-                "Select CSV File to Import (Format: samples in columns and analytes in rows, max. 500 MB)",
+                "Select CSV File to Import (Format: samples in columns and analytes in rows, max. 200 MB)",
                 accept = c("text/csv",
                            "text/comma-separated-values,text/plain",
                            ".csv")),
@@ -885,7 +917,7 @@ ui <- fluidPage(
 
 server <- function(input, output){
   
-  options(shiny.maxRequestSize=500*1024^2) 
+  options(shiny.maxRequestSize = 200*1024^2) 
   
   data_input <- reactive({
     validate(
@@ -914,8 +946,9 @@ server <- function(input, output){
     generatePlots(data_input(), output, omicsTypes())
   })
   
+  gc() 
+  
   output$plotlyPCA <- renderPlotly(plots()[["plotlyPCA"]])
-  # output$biplot <- renderPlot(plots()[["gg.biplot"]])
   output$plotlyUMAP <- renderPlotly(plots()[["plotlyUMAP"]])
   output$correlationplot <- renderPlot(plots()[["correlationplot"]])
   output$boxplot <- renderPlot(plots()[["gg.boxplot"]])
@@ -931,6 +964,7 @@ server <- function(input, output){
                          check.names = FALSE), file, row.names = FALSE)
     }
   )
+  
 }
 
 shinyApp(ui = ui, server = server)
