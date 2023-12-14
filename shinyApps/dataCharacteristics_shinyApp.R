@@ -279,10 +279,10 @@ getCharacteristicsHelper <- function(mtx){
   
   if (!is.vector(mtx)) {
     try({
-      if (nrow(mtx) > 1000)
+      if (nrow(mtx) > 1000) # samples
         mtx <- mtx[sample(1:nrow(mtx), 1000),] # downsampling in order to decrease RAM usage
-      if (ncol(mtx) > 1000)
-        mtx <- mtx[, sample(1:ncol(mtx), 1000)] # downsampling in order to decrease RAM usage
+      if (ncol(mtx) > 10000) # features
+        mtx <- mtx[, sample(1:ncol(mtx), 10000)] # downsampling in order to decrease RAM usage
       
       pca <- pcaMethods::pca(mtx, method = "nipals", center = TRUE, 
                              maxSteps = 5000)
