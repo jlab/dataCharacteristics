@@ -508,7 +508,8 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
   fig
 }
 
-integrateNewDataset <- function(mtx) {
+integrateNewDataset <- function(mtx,
+                                nNegativeNumbers) {
   # data <- getDataCharacteristics(mtx)
   
   ##############################
@@ -520,16 +521,15 @@ integrateNewDataset <- function(mtx) {
   nSamples <- ncol(mtx)
   nAnalytes <- nrow(mtx)
   
-  nNegativeNumbers <- sum(mtx < 0, na.rm = TRUE)
-  mtx <- log2(mtx)
-  mtx[mtx == "NaN"] <- NA
+  # nNegativeNumbers <- sum(mtx < 0, na.rm = TRUE)
+  # mtx <- log2(mtx)
+  # mtx[mtx == "NaN"] <- NA
   
   nDistinctValues <- length(unique(c(mtx[!is.na(mtx)])))
   naFeatures <- getNaFeatures(mtx)
   gc()
   
   characts <- getCharacteristicsHelper(mtx)
-  mtx <- NULL
   gc()
   charact.log <- c(naFeatures, characts, nDistinctValues = nDistinctValues, 
                    nNegativeNumbers = nNegativeNumbers)
@@ -703,11 +703,15 @@ generatePlots <- function(mtx, output, omicsTypes){
   allDataTypeLevels <- c("Data type", "Data type subgroups")
   selectedDataTypeLevel <- "Data type"
   
+  nNegativeNumbers <- sum(mtx < 0, na.rm = TRUE)
+  mtx <- log2(mtx)
+  mtx[mtx == "NaN"] <- NA
+  
   correlationplot <- plotCorrelation(mtx)
   gc()
 
-  data <- integrateNewDataset(mtx) %>% dplyr::select(-setdiff(!!allDataTypeLevels, 
-                                               !!selectedDataTypeLevel)) %>% 
+  data <- integrateNewDataset(mtx, nNegativeNumbers = nNegativeNumbers) %>% 
+    dplyr::select(-setdiff(!!allDataTypeLevels, !!selectedDataTypeLevel)) %>% 
     dplyr::rename("Data type" = !!selectedDataTypeLevel)
   mtx <- NULL
   gc()
@@ -858,7 +862,7 @@ ui <- fluidPage(
     sidebarPanel(
       title = "Inputs",
       fileInput("csv_input", 
-                "Select CSV File to Import (Format: samples in columns and analytes in rows, max. 200 MB)",
+                "Select CSV File to Import (Format: samples in columns and analytes in rows, max. 100 MB)",
                 accept = c("text/csv",
                            "text/comma-separated-values,text/plain",
                            ".csv")),
@@ -917,7 +921,7 @@ ui <- fluidPage(
 
 server <- function(input, output){
   
-  options(shiny.maxRequestSize = 200*1024^2) 
+  options(shiny.maxRequestSize = 100*1024^2) 
   
   data_input <- reactive({
     validate(
