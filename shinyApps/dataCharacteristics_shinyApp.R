@@ -454,14 +454,14 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
   P2$layers <- c(geom_point(aes(colour = groups), cex = 1, alpha = alpha), 
                  P2$layers)
   
-  my_colors <- scales::hue_pal()(length(unique(groups))-1)
+  my_colors <- scales::hue_pal()(length(unique(groups)) - 1)
   
   P2 <- P2 + 
     scale_color_manual(name = '',
                        values = my_colors,
                        limits = setdiff(unique(groups), "newDataset")
     ) +
-    geom_point(aes(x=cond[PCchoices[1]], y=cond[PCchoices[2]]), 
+    geom_point(aes(x = cond[PCchoices[1]], y = cond[PCchoices[2]]), 
                col = "red", size = 3) 
   
   P2
@@ -483,7 +483,7 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
   gc()
   fig <- plotly::plot_ly(dat.woNewDataset, x = ~PC1, y = ~PC2, z = ~PC3,
                          color = ~as.factor(dat.woNewDataset[[groupColName]]),
-                         type="scatter3d", mode="markers",
+                         type = "scatter3d", mode = "markers",
                          marker = list(size = 3, opacity = 0.5),
                          hovertext = paste("Dataset ID :", 
                                            dat.woNewDataset$Row.names)
@@ -650,7 +650,7 @@ getUMAPNewDataset <- function(df, groupColName = "") {
   groupVec <- df[[groupColName]]
   rownames.df <- row.names(df)
   
-  umap_fit <- df %>% dplyr::mutate(ID=row_number())  %>% 
+  umap_fit <- df %>% dplyr::mutate(ID = row_number()) %>% 
     dplyr::select(-!!groupColName) %>% dplyr::select_if(~ !any(is.na(.))) %>%
     remove_rownames() %>% column_to_rownames("ID") %>%
     scale() %>%
@@ -660,10 +660,10 @@ getUMAPNewDataset <- function(df, groupColName = "") {
   gc()
   
   umap_df <- umap_fit$layout %>%
-    as.data.frame()%>%
-    dplyr::rename(UMAP1="V1",
-                  UMAP2="V2",
-                  UMAP3="V3") %>%
+    as.data.frame() %>%
+    dplyr::rename(UMAP1 = "V1",
+                  UMAP2 = "V2",
+                  UMAP3 = "V3") %>%
     dplyr::mutate(!!groupColName := !!groupVec) 
   row.names(umap_df) <- rownames.df
   
@@ -672,7 +672,7 @@ getUMAPNewDataset <- function(df, groupColName = "") {
     dplyr::filter(!!as.name(groupColName) != "newDataset")
   fig <- plotly::plot_ly(dat.woNewDataset, x = ~UMAP1, y = ~UMAP2, z = ~UMAP3,
                          color = ~as.factor(dat.woNewDataset[[groupColName]]),
-                         type="scatter3d", mode="markers",
+                         type = "scatter3d", mode = "markers",
                          marker = list(size = 3, opacity = 0.5),
                          hovertext = paste("Dataset ID :", 
                                            row.names(dat.woNewDataset))
@@ -767,7 +767,7 @@ generatePlots <- function(mtx, output, omicsTypes){
   
   toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)  
   
-  for (var in toBeLog2Transformed){
+  for (var in toBeLog2Transformed) {
     data <- logTransform(df = data, variable = var, logBase = "log2")
   }
   
@@ -832,19 +832,19 @@ generatePlots <- function(mtx, output, omicsTypes){
       (newDatasetValues$value <= newDatasetValues$X95.), 'green', 'red')
   
   gg.boxplot <- ggplot(boxplot.df.long, aes(x = value, y = factor(1))) +
-    geom_violin(alpha=0.5) +
-    geom_boxplot(width=0.5, alpha=0.25, outlier.size=0.5) +
+    geom_violin(alpha = 0.5) +
+    geom_boxplot(width = 0.5, alpha = 0.25, outlier.size = 0.5) +
     geom_rect(data = newDatasetValues, 
               aes(fill = factor(included, levels = c('red', 'green'))), 
               xmin = -Inf, xmax = Inf,
               ymin = -Inf, ymax = Inf, alpha = 0.3) +
-    geom_vline(data = newDatasetValues, aes(xintercept=as.numeric(value)), 
+    geom_vline(data = newDatasetValues, aes(xintercept = as.numeric(value)), 
                colour = 'blue') +
     facet_wrap(. ~ factor(variable, levels=lev), ncol = 4, scales = "free_x") +
     ggplot2::theme_bw() +
     theme(axis.title = element_blank(),
-          axis.text.y=element_blank(),
-          axis.ticks.y=element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
           legend.position = "none")
   
   gc()
@@ -891,27 +891,27 @@ ui <- fluidPage(
     mainPanel(
       
       h2("Data characteristics:"),
-      withSpinner(htmlOutput(outputId="dataCharacteristics"), type = 5),
+      withSpinner(htmlOutput(outputId = "dataCharacteristics"), type = 5),
       hr(),
       h2("How close is provided dataset to selected omics type?"),
-      h3("If dataset lies between the 5th and 95th percentile box is colored green, else red"),
-      withSpinner(plotOutput(outputId="boxplot", 
-                             width="1100px",height="500px"),
+      h3("If dataset lies between the 5th and 95th percentile box is colored green, else red."),
+      withSpinner(plotOutput(outputId = "boxplot", 
+                             width = "1100px",height = "500px"),
                   type = 5),
       hr(),
       h2("PCA"),
-      h3("Omics types can be switched on and off by clicking on respective symbol in legend"),
-      withSpinner(plotlyOutput('plotlyPCA', width="1100px",height="500px"), 
+      h3("Omics types can be switched on and off by clicking on respective symbol in legend."),
+      withSpinner(plotlyOutput('plotlyPCA', width = "1100px", height = "500px"), 
                   type = 5),
       hr(),
       h2("UMAP"),
-      h3("Omics types can be switched on and off by clicking on respective symbol in legend"),
-      withSpinner(plotlyOutput('plotlyUMAP', width="1100px",height="500px"), 
+      h3("Omics types can be switched on and off by clicking on respective symbol in legend."),
+      withSpinner(plotlyOutput('plotlyUMAP', width = "1100px", height = "500px"), 
                   type = 5),
       hr(),
       h2("Sample mean vs. %NA for provided dataset"),
-      withSpinner(plotOutput(outputId="correlationplot", 
-                             width="1100px", height="500px"), type = 5)
+      withSpinner(plotOutput(outputId = "correlationplot", 
+                             width = "1100px", height = "500px"), type = 5)
       
     )
   )
