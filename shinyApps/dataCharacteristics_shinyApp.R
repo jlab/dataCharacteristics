@@ -861,11 +861,9 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       title = "Inputs",
-      fileInput("csv_input", 
-                "Select CSV File to Import (Format: samples in columns and analytes in rows, max. 100 MB)",
-                accept = c("text/csv",
-                           "text/comma-separated-values,text/plain",
-                           ".csv")),
+      fileInput("tsv_input", 
+                "Select .tsv file to import (Format: samples in columns and analytes in rows, max. 100 MB)",
+                accept = ".tsv"),
       checkboxInput("header", "Header", TRUE),
       checkboxInput("firstColumnRownames", 
                     "First column contains row names", TRUE),
@@ -902,10 +900,12 @@ ui <- fluidPage(
                   type = 5),
       hr(),
       h2("PCA"),
+      h3("Omics types can be switched on and off by clicking on respective symbol in legend"),
       withSpinner(plotlyOutput('plotlyPCA', width="1100px",height="500px"), 
                   type = 5),
       hr(),
       h2("UMAP"),
+      h3("Omics types can be switched on and off by clicking on respective symbol in legend"),
       withSpinner(plotlyOutput('plotlyUMAP', width="1100px",height="500px"), 
                   type = 5),
       hr(),
@@ -918,21 +918,21 @@ ui <- fluidPage(
 )
 
 
-
 server <- function(input, output){
   
   options(shiny.maxRequestSize = 100*1024^2) 
   
   data_input <- reactive({
     validate(
-      need(input$csv_input != "", "Please select a dataset")
+      need(input$tsv_input != "", "Please select a dataset")
     )
-    req(input$csv_input)
+    req(input$tsv_input)
     
-    mtx <- data.table::fread(input$csv_input$datapath,
+    mtx <- data.table::fread(input$tsv_input$datapath,
                              header = input$header,
                              data.table = FALSE,
-                             check.names = FALSE)
+                             check.names = FALSE,
+                             sep = '\t')
     
     if (input$firstColumnRownames) mtx <- mtx[, 2:ncol(mtx)]
     mtx <- as.matrix(mtx)
@@ -961,11 +961,14 @@ server <- function(input, output){
   
   output$downloadData <- downloadHandler(
     filename = function() {
-      "DIANN_DIANN_AI_GPF_example.csv"
+      "DIANN_DIANN_AI_GPF_example.tsv"
     },
     content = function(file) {
-      write.csv(read.csv("DIANN_DIANN_AI_GPF_example.csv", 
-                         check.names = FALSE), file, row.names = FALSE)
+      write.table(read.table("DIANN_DIANN_AI_GPF_example.tsv", 
+                             check.names = FALSE, sep = '\t', header = TRUE), 
+                  file, 
+                  sep = '\t', 
+                  row.names = FALSE)
     }
   )
   
