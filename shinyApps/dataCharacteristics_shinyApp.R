@@ -470,6 +470,26 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
 plot3DPCA <- function(df, groupColName = "", addStr = "", 
                       pcaMethod = "nipals") {
   
+  customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
+                    "Metabolomics (MS)" = "#0033CC",
+                    
+                    "Proteomics (LFQ, PRIDE)" = "#800000",
+                    "Proteomics (Intensity, PRIDE)" =  "#DC143C",
+                    "Proteomics (iBAQ, PRIDE)" = "#DE4B7E",
+                    "Proteomics (Intensity, Expression Atlas)" = "#FF6600",
+                    "Proteomics (iBAQ, Expression Atlas)" = "#FFC0CB",
+                    
+                    "RNA-seq (raw)" = "#2E5F72",
+                    "RNA-seq (FPKM)" = "#467741",
+                    "RNA-seq (TPM)" = "#32CD32",
+                    "Microarray" = "#5BB3B1",
+                    
+                    "scProteomics" = "#806FC4",
+                    "scRNA-seq (unnormalized)" = "#DDA0DD",
+                    "scRNA-seq (normalized)" = "#BA30B5",
+                    "Microbiome" = "#6911D3"
+  )
+  
   pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), 
                          method = pcaMethod, nPcs = 4, center = TRUE
                          , scale = "uv")
@@ -483,6 +503,7 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
   gc()
   fig <- plotly::plot_ly(dat.woNewDataset, x = ~PC1, y = ~PC2, z = ~PC3,
                          color = ~as.factor(dat.woNewDataset[[groupColName]]),
+                         colors = customColors,
                          type = "scatter3d", mode = "markers",
                          marker = list(size = 3, opacity = 0.5),
                          hovertext = paste("Dataset ID :", 
@@ -501,7 +522,7 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
                            y = newDataset$PC2, 
                            z = newDataset$PC3, 
                            type = "scatter3d", 
-                           mode = "markers", color = I("red"), 
+                           mode = "markers", color = I("black"), 
                            inherit = FALSE, name = "Provided Dataset")
   
   
@@ -610,6 +631,30 @@ integrateNewDataset <- function(mtx,
     data.allDatasets$`Corr(Mean vs. % NA) (Analytes) (p-Value)` <-
     data.allDatasets$`Bimodality of sample correlations` <- NULL
   
+  
+  
+  levels <- c('Metabolomics (NMR)', 
+              'Metabolomics (MS)',
+              
+              'Proteomics (LFQ, PRIDE)',
+              'Proteomics (Intensity, PRIDE)',
+              'Proteomics (iBAQ, PRIDE)',
+              'Proteomics (Intensity, Expression Atlas)',
+              'Proteomics (iBAQ, Expression Atlas)', 
+              
+              'RNA-seq (raw)',
+              'RNA-seq (FPKM)',
+              'RNA-seq (TPM)',
+              'Microarray',
+              
+              'scProteomics',
+              'scRNA-seq (unnormalized)',
+              'scRNA-seq (normalized)',
+              'Microbiome'
+  )
+  
+  data.allDatasets[, "Data type"] <- factor(data.allDatasets[, "Data type"], levels = levels)
+  
   data.allDatasets <- rbind(data.allDatasets, data)
   
   data <- NULL
@@ -646,6 +691,27 @@ plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "",
 
 
 getUMAPNewDataset <- function(df, groupColName = "") {
+  
+  customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
+                    "Metabolomics (MS)" = "#0033CC",
+                    
+                    "Proteomics (LFQ, PRIDE)" = "#800000",
+                    "Proteomics (Intensity, PRIDE)" =  "#DC143C",
+                    "Proteomics (iBAQ, PRIDE)" = "#DE4B7E",
+                    "Proteomics (Intensity, Expression Atlas)" = "#FF6600",
+                    "Proteomics (iBAQ, Expression Atlas)" = "#FFC0CB",
+                    
+                    "RNA-seq (raw)" = "#2E5F72",
+                    "RNA-seq (FPKM)" = "#467741",
+                    "RNA-seq (TPM)" = "#32CD32",
+                    "Microarray" = "#5BB3B1",
+                    
+                    "scProteomics" = "#806FC4",
+                    "scRNA-seq (unnormalized)" = "#DDA0DD",
+                    "scRNA-seq (normalized)" = "#BA30B5",
+                    "Microbiome" = "#6911D3"
+  )
+  
   set.seed(142)
   groupVec <- df[[groupColName]]
   rownames.df <- row.names(df)
@@ -672,6 +738,7 @@ getUMAPNewDataset <- function(df, groupColName = "") {
     dplyr::filter(!!as.name(groupColName) != "newDataset")
   fig <- plotly::plot_ly(dat.woNewDataset, x = ~UMAP1, y = ~UMAP2, z = ~UMAP3,
                          color = ~as.factor(dat.woNewDataset[[groupColName]]),
+                         colors = customColors,
                          type = "scatter3d", mode = "markers",
                          marker = list(size = 3, opacity = 0.5),
                          hovertext = paste("Dataset ID :", 
@@ -689,7 +756,7 @@ getUMAPNewDataset <- function(df, groupColName = "") {
                            y = newDataset$UMAP2, 
                            z = newDataset$UMAP3, 
                            type = "scatter3d", 
-                           mode = "markers", color = I("red"), 
+                           mode = "markers", color = I("black"), 
                            inherit = FALSE, name = "Provided Dataset")
   fig
 }
@@ -873,16 +940,21 @@ ui <- fluidPage(
       hr(),
       
       radioButtons("omicsTypes", "Omics types",
-                   choices =  c("Metabolomics (MS)", "Metabolomics (NMR)", 
-                                "Microarray", "Microbiome",
-                                "Proteomics (iBAQ, Expression Atlas)", 
-                                "Proteomics (Intensity, Expression Atlas)",
-                                "Proteomics (LFQ, PRIDE)", 
-                                "Proteomics (Intensity, PRIDE)", 
-                                "Proteomics (iBAQ, PRIDE)",
-                                "RNA-seq (FPKM)", "RNA-seq (raw)", 
-                                "RNA-seq (TPM)", "scRNA-seq (normalized)",
-                                "scRNA-seq (unnormalized)", "scProteomics"),
+                   choices =  c('Metabolomics (NMR)', 
+                                'Metabolomics (MS)',
+                                'Proteomics (LFQ, PRIDE)',
+                                'Proteomics (Intensity, PRIDE)',
+                                'Proteomics (iBAQ, PRIDE)',
+                                'Proteomics (Intensity, Expression Atlas)',
+                                'Proteomics (iBAQ, Expression Atlas)', 
+                                'RNA-seq (raw)',
+                                'RNA-seq (FPKM)',
+                                'RNA-seq (TPM)',
+                                'Microarray',
+                                'scProteomics',
+                                'scRNA-seq (unnormalized)',
+                                'scRNA-seq (normalized)',
+                                'Microbiome'),
                    selected = "Proteomics (LFQ, PRIDE)"),
       br(),
       actionButton("run_button", "Run Analysis", icon = icon("play")),

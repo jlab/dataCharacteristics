@@ -10,6 +10,7 @@ library(tibble)
 library(ggbiplot)
 theme_set(theme_bw())
 
+library(patchwork)
 library(plotly)
 library(htmlwidgets)
 ################################################################################
@@ -44,7 +45,9 @@ logTransform <- function(df, variable, logBase = c("log2", "log1p")){
 }
 
 plotBoxplots <- function(data2.long, fileNameAddition = "", height = 12, 
-                         width = 18, varsToRank = c(), order = NULL) {
+                         width = 18, varsToRank = c(), order = NULL,
+                         customColors = c()) {
+  
   if (length(varsToRank) > 0) {
     data2.long <- data2.long %>% na.omit() %>% 
       dplyr::group_by(variable) %>%
@@ -75,8 +78,8 @@ plotBoxplots <- function(data2.long, fileNameAddition = "", height = 12,
   ggplot.charact <- ggplot(
     data2.long, aes(forcats::fct_rev(`Data type`), value)) +
     # geom_boxplot(aes(fill = `Data type`), alpha=0.5, outlier.size=0.5) +
-    geom_violin(aes(fill = `Data type`), alpha = 0.5, scale = "width") +
-    geom_boxplot(aes(fill = `Data type`), width = 0.5, alpha = 0.25, 
+    geom_violin(aes(fill = `Data type`), alpha = 0.9, scale = "width") +
+    geom_boxplot(aes(fill = `Data type`), width = 0.5, alpha = 0.9, 
                  outlier.size = 0.5) +
     coord_flip() +
     xlab("") +
@@ -100,7 +103,12 @@ plotBoxplots <- function(data2.long, fileNameAddition = "", height = 12,
           strip.placement = "outside", # Place facet labels outside x axis labels.
           strip.background = element_blank(),  # Make facet label background white.
           axis.title = element_blank()) +     
-    guides(fill = ggplot2::guide_legend(reverse = TRUE))
+    guides(fill = ggplot2::guide_legend(reverse = TRUE)) 
+  
+  if (length(customColors) > 0) {
+    ggplot.charact <- ggplot.charact +
+      ggplot2::scale_fill_manual(values = customColors)
+  }
   ggsave(file = paste0("boxplots", fileNameAddition, ".pdf"), 
          ggplot.charact, height = height, width = width)
 }
@@ -169,6 +177,7 @@ plotPairsPlotForTypes <- function(df, groupColName = "Data type",
   }
 }
 
+
 plotPCABiplot <- function(df, groups= c(), alpha = 0.5, 
                           pcaMethod = "nipals",
                           coordRatio = 0.5, 
@@ -177,7 +186,11 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
                           ylimLower = NA, ylimUpper = NA,
                           PCchoices = 1:2,
                           ellipse = TRUE,
-                          addStr = "") {
+                          addStr = "",
+                          groupColName = "",
+                          customColors = customColors,
+                          axisLabelSize = 10,
+                          axisTitleSize = 12) {
   # See https://stackoverflow.com/a/49788251
   #   # devtools::install_github("vqv/ggbiplot")
   # library(ggbiplot)
@@ -214,14 +227,20 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
                            varname.size = 2.5,
                            var.axes = T,
                            groups = groups, 
-                           alpha = 0)  +
+                           alpha = 0,
+                           varname.adjust = 1.25)  +
     scale_color_discrete(name = '') +  
     coord_fixed(ratio = coordRatio) +
     ggplot2::guides(colour = ggplot2::guide_legend(
       override.aes = list(alpha = 1, size = 3)))
   
-  if (all(PCchoices == 1:2)) P2 <- P2 + 
-    ggplot2::scale_y_continuous(limits = c(-5, 10.3))
+    if (groupColName == "Data type") {
+      P2 <- P2 + ggplot2::scale_colour_manual(values = customColors) +
+        ggplot2::theme(legend.title = element_blank())
+    }
+  
+  #if (all(PCchoices == 1:2)) P2 <- P2 + 
+  #  ggplot2::scale_y_continuous(limits = c(-5, 10.3))
   
   # For nipals:
   # row.names(PCA.data)[which(PCA.data$PC2<(-5) | PCA.data$PC2>10.3)] 
@@ -251,7 +270,9 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
   
   
   P2 <- P2 + theme(legend.direction = 'horizontal', 
-                    legend.position = 'bottom')
+                   legend.position = 'bottom',
+                   axis.text = element_text(size = axisLabelSize),
+                   axis.title = element_text(size = axisTitleSize))
   
   P2$layers <- c(geom_point(aes(colour = groups), cex = 1, alpha = alpha), 
                  P2$layers)
@@ -260,63 +281,124 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
 }
 
 plotPCABiplots <- function(df, groupColName = "", addStr = "", 
-                           pcaMethod = "nipals") {
+                           pcaMethod = "nipals",
+                          coordRatio = 0.5,
+                          xlimLower = NA, xlimUpper = NA,
+                          ylimLower = NA, ylimUpper = NA,
+                          plotWidth = 11, plotheight = 9,
+                          axisLabelSize = 10,
+                          axisTitleSize = 12) {
+  
+  customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
+                    "Metabolomics (MS)" = "#0033CC",
+                    
+                    "Proteomics (LFQ, PRIDE)" = "#800000",
+                    "Proteomics (Intensity, PRIDE)" =  "#DC143C",
+                    "Proteomics (iBAQ, PRIDE)" = "#DE4B7E",
+                    "Proteomics (Intensity, Expression Atlas)" = "#FF6600",
+                    "Proteomics (iBAQ, Expression Atlas)" = "#FFC0CB",
+                    
+                    "RNA-seq (raw)" = "#2E5F72",
+                    "RNA-seq (FPKM)" = "#467741",
+                    "RNA-seq (TPM)" = "#32CD32",
+                    "Microarray" = "#5BB3B1",
+                    
+                    "scProteomics" = "#806FC4",
+                    "scRNA-seq (unnormalized)" = "#DDA0DD",
+                    "scRNA-seq (normalized)" = "#BA30B5",
+                    "Microbiome" = "#6911D3"
+  )
   
   pdf(file = paste0("biplot_", pcaMethod, "_", addStr, ".pdf"),
-      width = 11, height = 9)
+      width = plotWidth, height = plotheight)
   print(plotPCABiplot(df = df %>% dplyr::select(-!!groupColName), 
                       groups = df[[groupColName]],
                       alpha = 0.3,
                       pcaMethod = pcaMethod,
-                      coordRatio = 1/2,
+                      coordRatio = coordRatio, 
+                      xlimLower = xlimLower, 
+                      xlimUpper = xlimUpper,
+                      ylimLower = ylimLower, 
+                      ylimUpper = ylimUpper,
                       facetZoom = FALSE,
-                      addStr = addStr))
+                      addStr = addStr,
+                      groupColName = groupColName,
+                      customColors = customColors,
+                      axisLabelSize = axisLabelSize,
+                      axisTitleSize = axisTitleSize))
   dev.off()
   
   pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), 
                          method = pcaMethod, nPcs = 4, center = TRUE
                          , scale = "uv")
   write.csv(pca@loadings, paste0("loadings_",  pcaMethod, "_", addStr,".csv"))
-  dat <- merge(pcaMethods::scores(pca), df, by = 0)
-  
-  pdf(paste0("ggpairs_", pcaMethod, "_", addStr, ".pdf"), 
-      width = 12, height = 10)
-  print(GGally::ggpairs(dat, 
-                        columns = 2:5, ggplot2::aes(colour = get(groupColName)),
-                        lower = list(
-                          continuous = wrap("smooth", alpha = 0.3, size = 1),
-                          combo = wrap("dot_no_facet", alpha = 0.4)),
-                        upper = list(continuous = wrap("cor", 
-                                                     method = "spearman", 
-                                                     size = 3)),
-                        mapping = aes(color = get(groupColName),
-                                    fill = get(groupColName), 
-                                    alpha = 0.5)) +
-          ggtitle(groupColName) +
-          theme_bw())
-  dev.off()
-  
-  fig <- plotly::plot_ly(dat, x = ~PC1, y = ~PC2, z = ~PC3, 
-                 color = ~as.factor(dat[[groupColName]]), 
-                 type = "scatter3d", mode = "markers",
-                 #colors = c('#636EFA','#EF553B') , 
-                 marker = list(size = 2)
-                 # , alpha = 0.75
-  ) #%>%
-  # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
-  fig <- fig %>%
-    plotly::layout(
-      title = "3D PCA",
-      scene = list(bgcolor = "#e5ecf6"
-      )
-    )
-  
-  htmlwidgets::saveWidget(fig, 
-                          paste0("plotly_", pcaMethod, "_", addStr,".html"), 
-                          selfcontained = F, libdir = "lib")
+  # dat <- merge(pcaMethods::scores(pca), df, by = 0)
+  # 
+  # pdf(paste0("ggpairs_", pcaMethod, "_", addStr, ".pdf"), 
+  #     width = 12, height = 10)
+  # print(GGally::ggpairs(dat, 
+  #                       columns = 2:5, ggplot2::aes(colour = get(groupColName)),
+  #                       lower = list(
+  #                         continuous = wrap("smooth", alpha = 0.3, size = 1),
+  #                         combo = wrap("dot_no_facet", alpha = 0.4)),
+  #                       upper = list(continuous = wrap("cor", 
+  #                                                      method = "spearman", 
+  #                                                      size = 3)),
+  #                       mapping = aes(color = get(groupColName),
+  #                                     fill = get(groupColName), 
+  #                                     alpha = 0.5)) +
+  #         ggtitle(groupColName) +
+  #         theme_bw())
+  # dev.off()
+  # 
+  # fig <- plotly::plot_ly(dat, x = ~PC1, y = ~PC2, z = ~PC3, 
+  #                        color = ~as.factor(dat[[groupColName]]), 
+  #                        type = "scatter3d", mode = "markers",
+  #                        #colors = c('#636EFA','#EF553B') , 
+  #                        marker = list(size = 2)
+  #                        # , alpha = 0.75
+  # ) #%>%
+  # # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
+  # fig <- fig %>%
+  #   plotly::layout(
+  #     title = "3D PCA",
+  #     scene = list(bgcolor = "#e5ecf6"
+  #     )
+  #   )
+  # 
+  # htmlwidgets::saveWidget(fig, 
+  #                         paste0("plotly_", pcaMethod, "_", addStr,".html"), 
+  #                         selfcontained = F, libdir = "lib")
 }
 
-plotUMAPplots <- function(df, groupColName = "", addStr = "", alpha = 0.3) {
+
+plotUMAPplots <- function(df, groupColName = "", addStr = "", pointAlpha = 1,
+                          pointSize = 0.8#, 
+                          # pointStroke = 0.3
+                          ) {
+  
+  df <- df[, apply(df, 2, function(x) {length(unique(x)) > 1}) ]
+  
+  customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
+                    "Metabolomics (MS)" = "#0033CC",
+                    
+                    "Proteomics (LFQ, PRIDE)" = "#800000",
+                    "Proteomics (Intensity, PRIDE)" =  "#DC143C",
+                    "Proteomics (iBAQ, PRIDE)" = "#DE4B7E",
+                    "Proteomics (Intensity, Expression Atlas)" = "#FF6600",
+                    "Proteomics (iBAQ, Expression Atlas)" = "#FFC0CB",
+                    
+                    "RNA-seq (raw)" = "#2E5F72",
+                    "RNA-seq (FPKM)" = "#467741",
+                    "RNA-seq (TPM)" = "#32CD32",
+                    "Microarray" = "#5BB3B1",
+                    
+                    "scProteomics" = "#806FC4",
+                    "scRNA-seq (unnormalized)" = "#DDA0DD",
+                    "scRNA-seq (normalized)" = "#BA30B5",
+                    "Microbiome" = "#6911D3"
+  )
+  
   set.seed(142)
   umap_fit <- df %>% dplyr::mutate(ID = row_number())  %>%
     dplyr::select(-!!groupColName) %>% 
@@ -336,31 +418,75 @@ plotUMAPplots <- function(df, groupColName = "", addStr = "", alpha = 0.3) {
   
   write.csv(umap_df, file = paste0("UMAP_", addStr,".csv"))
   
+  gg12 <- ggplot2::ggplot(umap_df, ggplot2::aes(
+    x = UMAP1, y = UMAP2, color = get(groupColName))) +
+    ggplot2::geom_point(size = pointSize, alpha = pointAlpha#, 
+                        #shape = 21, aes(stroke = pointStroke)
+                        )  + 
+    ggplot2::theme(legend.direction = 'horizontal', 
+                   legend.position = 'bottom') +
+    ggplot2::scale_color_discrete(name = '') +
+    ggplot2::guides(colour = ggplot2::guide_legend(
+      override.aes = list(alpha = 1, size = 3)))
+  
+  
+  umapDataTypes <- lapply(
+    levels(groupVec),
+    function(x, umap_df, groupColName) {
+      ggplot2::ggplot(umap_df[umap_df[groupColName] == as.character(x), ], ggplot2::aes(
+        x = UMAP1, y = UMAP2)) +
+        ggplot2::geom_point(size = 0.7, alpha = 0.25)  + 
+        ggplot2::theme(legend.direction = 'horizontal', 
+                       legend.position = 'bottom') +
+        ggplot2::scale_color_discrete(name = '') +
+        ggplot2::guides(colour = ggplot2::guide_legend(
+          override.aes = list(alpha = 1, size = 3))) +
+        xlim(min(umap_df$UMAP1), max(umap_df$UMAP1)) + 
+        ylim(min(umap_df$UMAP2), max(umap_df$UMAP2)) +
+        ggplot2::ggtitle(as.character(x))
+    }, umap_df = umap_df, groupColName = groupColName)
+  
+  
+  umapDataTypes <- list(
+    umapDataTypes[[1]], umapDataTypes[[2]], 
+    patchwork::plot_spacer(), patchwork::plot_spacer(), patchwork::plot_spacer(),
+    umapDataTypes[[3]], umapDataTypes[[4]], umapDataTypes[[5]],
+    umapDataTypes[[6]], umapDataTypes[[7]],
+    umapDataTypes[[8]], umapDataTypes[[9]], umapDataTypes[[10]], umapDataTypes[[11]],
+    patchwork::plot_spacer(),
+    umapDataTypes[[12]], umapDataTypes[[13]], umapDataTypes[[14]], umapDataTypes[[15]])
+  ggsave(file = paste0("umap_Dim1vsDim2_", addStr, "_dataTypes.pdf"), 
+         patchwork::wrap_plots(umapDataTypes, ncol = 5), 
+         width = 20, height = 12)
+  
+  
+  gg23 <- ggplot2::ggplot(umap_df, ggplot2::aes(x = UMAP2, y = UMAP3, 
+                                        color = get(groupColName))) +
+    ggplot2::geom_point(size = pointSize, alpha = pointAlpha#, 
+                        #shape = 21, aes(stroke = pointStroke)
+                        )  + 
+    ggplot2::theme(legend.direction = 'horizontal', 
+                   legend.position = 'bottom') +
+    ggplot2::scale_color_discrete(name = '') +
+    ggplot2::guides(colour = ggplot2::guide_legend(
+      override.aes = list(alpha = 1, size = 3)))
+  
+  if (groupColName == "Data type") {
+    gg12 <- gg12 + ggplot2::scale_colour_manual(values = customColors) +
+      ggplot2::theme(legend.title = element_blank())
+    gg23 <- gg23 + ggplot2::scale_colour_manual(values = customColors) +
+      ggplot2::theme(legend.title = element_blank())
+  }
+  
   pdf(file = paste0("umap_Dim1vsDim2_", addStr, ".pdf"), width = 11, height = 9)
-  print(
-    ggplot2::ggplot(umap_df, ggplot2::aes(
-      x = UMAP1, y = UMAP2, color = get(groupColName))) +
-      ggplot2::geom_point(size = 0.8, alpha = alpha)  + 
-      ggplot2::theme(legend.direction = 'horizontal', 
-                     legend.position = 'bottom') +
-      ggplot2::scale_color_discrete(name = '') +
-      ggplot2::guides(colour = ggplot2::guide_legend(
-        override.aes = list(alpha = 1, size = 3)))
-  )
+  print(gg12)
   dev.off()
   
   pdf(file = paste0("umap_Dim2vsDim3_", addStr, ".pdf"), width = 11, height = 9)
-  print(
-    ggplot2::ggplot(umap_df, ggplot2::aes(x = UMAP2, y = UMAP3, 
-                                          color = get(groupColName))) +
-      ggplot2::geom_point(size = 0.8, alpha = alpha)  + 
-      ggplot2::theme(legend.direction = 'horizontal', 
-                     legend.position = 'bottom') +
-      ggplot2::scale_color_discrete(name = '') +
-      ggplot2::guides(colour = ggplot2::guide_legend(
-        override.aes = list(alpha = 1, size = 3)))
-  )
+  print(gg23)
   dev.off()
+  
+  gg12
 }
 
 ################################################################################
@@ -660,17 +786,25 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
                           "RNA-seq (FPKM)", "RNA-seq (raw)", "RNA-seq (TPM)", 
                           "scRNA-seq (normalized)", 
                           "scRNA-seq (unnormalized)", "scProteomics")
-    levels <- c( "Metabolomics (NMR)", "Metabolomics (MS)", 
-                 "Proteomics (iBAQ, Expression Atlas)", 
-                 "Proteomics (Intensity, Expression Atlas)",
-                 "Proteomics (iBAQ, PRIDE)", 
-                 "Proteomics (Intensity, PRIDE)", "Proteomics (LFQ, PRIDE)", 
-                 "scProteomics",
-                 "Microarray", 
-                 "RNA-seq (raw)", "RNA-seq (FPKM)", "RNA-seq (TPM)", 
-                 "scRNA-seq (unnormalized)",
-                 "scRNA-seq (normalized)", 
-                 "Microbiome")
+    levels <- c('Metabolomics (NMR)', 
+                'Metabolomics (MS)',
+                
+                'Proteomics (LFQ, PRIDE)',
+                'Proteomics (Intensity, PRIDE)',
+                'Proteomics (iBAQ, PRIDE)',
+                'Proteomics (Intensity, Expression Atlas)',
+                'Proteomics (iBAQ, Expression Atlas)', 
+                
+                'RNA-seq (raw)',
+                'RNA-seq (FPKM)',
+                'RNA-seq (TPM)',
+                'Microarray',
+                
+                'scProteomics',
+                'scRNA-seq (unnormalized)',
+                'scRNA-seq (normalized)',
+                'Microbiome'
+    )
   } else if (dataTypeLevel == "dataTypeSubgroups") {
     OldDataTypeNames <- c(
       "metabolomics_MS_LC", "metabolomics_MS_GC", "metabolomics_MS_Undefined", 
@@ -731,13 +865,9 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
       "Metabolomics (CE-MS)", "Metabolomics (Other ionization-MS)", 
       "Metabolomics (Undefined-MS)", 
       
-      "Proteomics (iBAQ, Expression Atlas)", 
-      "Proteomics (Intensity, Expression Atlas)", 
-      "Proteomics (LFQ, Expression Atlas)", 
-      
-      "Proteomics (iBAQ, PRIDE, Agilent)", "Proteomics (iBAQ, PRIDE, Thermo)", 
-      "Proteomics (iBAQ, PRIDE, Bruker)", 
-      "Proteomics (iBAQ, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, Undefined)", 
+      "Proteomics (LFQ, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Thermo)", 
+      "Proteomics (LFQ, PRIDE, Bruker)", 
+      "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (LFQ, PRIDE, Undefined)",
       
       "Proteomics (Intensity, PRIDE, Agilent)", 
       "Proteomics (Intensity, PRIDE, Thermo)", 
@@ -745,18 +875,22 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
       "Proteomics (Intensity, PRIDE, SCIEX)", 
       "Proteomics (Intensity, PRIDE, Undefined)", 
       
-      "Proteomics (LFQ, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Thermo)", 
-      "Proteomics (LFQ, PRIDE, Bruker)", 
-      "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (LFQ, PRIDE, Undefined)",
+      "Proteomics (iBAQ, PRIDE, Agilent)", "Proteomics (iBAQ, PRIDE, Thermo)", 
+      "Proteomics (iBAQ, PRIDE, Bruker)", 
+      "Proteomics (iBAQ, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, Undefined)", 
       
-      "scProteomics",
-      
-      "Microarray (Affymetrix)", "Microarray (Illumina)", 
-      "Microarray (Agilent)", 
+      "Proteomics (LFQ, Expression Atlas)", 
+      "Proteomics (Intensity, Expression Atlas)", 
+      "Proteomics (iBAQ, Expression Atlas)",
       
       "RNA-seq (raw)", 
       "RNA-seq (FPKM)", 
       "RNA-seq (TPM)", 
+      
+      "Microarray (Affymetrix)", "Microarray (Illumina)", 
+      "Microarray (Agilent)", 
+      
+      "scProteomics",
       
       "scRNA-seq (SMART-like, unnormalized)",
       "scRNA-seq (Droplet-based, unnormalized)", 
@@ -900,7 +1034,7 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   toBeLog2Transformed <- setdiff(toBeLog2Transformed, colsWithNegativeNumbers)
   # "# Samples"  "# Analytes" "Variance"  
 
-  for (var in toBeLog2Transformed){
+  for (var in toBeLog2Transformed) {
     # print(var)
     data2 <- logTransform(df = data2, variable = var, logBase = "log2")
   }
@@ -923,6 +1057,9 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   
   data2.complete <- data2[,!(colnames(data2) %in% naRelatedCols)]
   data2.complete <- data2.complete[complete.cases(data2.complete), ]
+  # The following datasets are removed in data2.complete compared to data2:
+  # [1] "PXD029255_200303_HeLa_IAA-Desthio_10_proteinGroups.txt_^LFQ_"      
+  # [2] "PXD029255_200303_HeLa_IAA-Desthio_10_proteinGroups.txt_^Intensity_"
   
   #############################################
   
@@ -969,18 +1106,43 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
     width <- 15
   }
   
+  customColors <- c()
+  if (selectedDataTypeLevel == "Data type") {
+    customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
+                      "Metabolomics (MS)" = "#0033CC",
+                      
+                      "Proteomics (LFQ, PRIDE)" = "#800000",
+                      "Proteomics (Intensity, PRIDE)" =  "#DC143C",
+                      "Proteomics (iBAQ, PRIDE)" = "#DE4B7E",
+                      "Proteomics (Intensity, Expression Atlas)" = "#FF6600",
+                      "Proteomics (iBAQ, Expression Atlas)" = "#FFC0CB",
+                      
+                      "RNA-seq (raw)" = "#2E5F72",
+                      "RNA-seq (FPKM)" = "#467741",
+                      "RNA-seq (TPM)" = "#32CD32",
+                      "Microarray" = "#5BB3B1",
+                      
+                      "scProteomics" = "#806FC4",
+                      "scRNA-seq (unnormalized)" = "#DDA0DD",
+                      "scRNA-seq (normalized)" = "#BA30B5",
+                      "Microbiome" = "#6911D3"
+    )
+  }
+  
   plotBoxplots(data2.long, 
                fileNameAddition = paste0(
                  "_allDataTypes_", 
                  gsub(" ", "_", selectedDataTypeLevel)), 
-               height = height, width = width)
+               height = height, width = width,
+               customColors = customColors)
   
   plotBoxplots(data2.long, 
                fileNameAddition = paste0("_allDataTypes_ranks_", 
                                          gsub(" ", "_", selectedDataTypeLevel)), 
                height = height, width = width,
                varsToRank = unique(data2.long$variable),
-               order = neworder)
+               order = neworder,
+               customColors = customColors)
   
   plotBoxplots(data2.long, 
                fileNameAddition = paste0(
@@ -992,7 +1154,8 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
                  "Skewness",
                  "Lin. coef. of Poly2(Means vs. Vars) (Analytes)",
                  "Quadr. coef. of Poly2(Means vs. Vars) (Analytes)"),
-               order = neworder)
+               order = neworder,
+               customColors = customColors)
   
   #############################################
   
@@ -1026,31 +1189,103 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   
   #############################################
   
-  margPlot <- ggplot(data, aes(x = `Corr(Mean vs. % NA) (Samples)`, 
-                               y = `Corr(Mean vs. % NA) (Analytes)`, 
-                               colour = `Data type`)) +
-    geom_point(aes(fill = `Data type`), size = 0.8, alpha = 0.5) +
-    theme_minimal() +
-    theme(legend.title=element_blank())
-  
-  pdf(paste0("marginPlot_", gsub(" ", "_", selectedDataTypeLevel), ".pdf"), 
-      width = 12, height = 10)
-  print(ggExtra::ggMarginal(margPlot, groupFill = TRUE, groupColour = TRUE))
-  dev.off()
-  
-  #############################################
-  
   if (selectedDataTypeLevel == "Data type") {
+    
+    # data2.nonVarColsRemoved <- data2 %>% select(-'Data type')
+    # data2.nonVarColsRemoved <- 
+    #   data2.nonVarColsRemoved[, apply(data2.nonVarColsRemoved, 
+    #                                   2, function(x) {length(unique(x)) > 1}) ]
+    # 
+    # corm <- cor(data2.nonVarColsRemoved)
+    # out <- as.data.frame(apply(
+    #   corm, 2, function(x) ifelse(abs(x) > 0.9, round(x, 3), "-")))
+    # 
+    # # Out: min(%NA in samples), max(%NA in samples), %Analytes with NAs, %Samples with NAs
+    # remove <- c("max(% NA in analytes)", "min(% NA in samples)", "max(% NA in samples)", 
+    #             "% Analytes with NAs", "Median", "Max", "log2(median(Variance of samples))", 
+    #             "log2(median(Variance of analytes))")
+    
+    remove <- c("min(% NA in analytes)", "max(% NA in analytes)", 
+                "min(% NA in samples)", "max(% NA in samples)",
+                "% Analytes with NAs", 
+                "% Samples with NAs",
+                "Median", "Max", "log2(median(Variance of samples))", 
+                            "log2(median(Variance of analytes))")
+    
     plotPCABiplots(df = data2.complete, groupColName = "Data type", 
                    addStr = gsub(" ", "_", selectedDataTypeLevel), 
-                   pcaMethod = "svd") # "svd" or "nipals"
+                   pcaMethod = "svd",
+                   ylimLower = -5, ylimUpper = 10.3
+                   )
     plotPCABiplots(df = data2, groupColName = "Data type", 
                    addStr = gsub(" ", "_", selectedDataTypeLevel), 
-                   pcaMethod = "nipals") # "svd" or "nipals"
+                   pcaMethod = "nipals",
+                   ylimLower = -5, ylimUpper = 10.3
+                   ) 
     
-    plotUMAPplots(df = data2, groupColName = "Data type", 
-                  addStr = gsub(" ", "_", selectedDataTypeLevel))
-  } 
+    umap12 <- plotUMAPplots(df = data2.complete, groupColName = "Data type", 
+                  addStr = gsub(" ", "_", selectedDataTypeLevel),
+                  pointSize = 0.5,
+                  pointAlpha = 0.5)
+    
+    umap_data <- umap12[["data"]]
+
+    data2.NAsamplesRemoved <- data2
+    data2.NAsamplesRemoved <- data2.NAsamplesRemoved[
+      !(row.names(data2.NAsamplesRemoved) %in% 
+          setdiff(row.names(data2), row.names(data2.complete))),]
+    
+      
+    umapColorPlotsLst <- lapply(
+      setdiff(colnames(data2.NAsamplesRemoved), "Data type"),
+      function(x, umap_data, data2.NAsamplesRemoved) {
+        ggplot(umap_data, aes(x = UMAP1, y = UMAP2, 
+                              color = data2.NAsamplesRemoved[, x])) +
+          geom_point(aes(stroke = 0.1), 
+                     # alpha = 0.25, 
+                     size = 0.5, shape = 21) +
+          labs(title = x) +
+          scale_colour_continuous(type = "viridis") +
+          theme_bw() +
+          theme(legend.title = element_blank(),
+                legend.position = "bottom",
+                legend.key.size = unit(0.8, "cm"),
+                legend.key.height = unit(0.3, "cm"),
+                legend.text = element_text(size = 11),
+                plot.title = element_text(size = 15),
+                axis.title = element_text(size = 11))
+      }, umap_data = umap_data, data2.NAsamplesRemoved = data2.NAsamplesRemoved)
+    
+    ggsave(filename = "umap_Dim1vsDim2_Data_type_DataCharColors.pdf", 
+           patchwork::wrap_plots(umapColorPlotsLst, ncol = 5), 
+           height = 28, width = 27)
+    
+    
+    #"% Analytes with NAs", "% Samples with NAs", "Corr(Mean vs. % NA) (Samples)",
+    #"% Distinct values", "log2(# Samples)", "log2(# Analytes)" 
+    ggsave(filename = "umap_Dim1vsDim2_Data_type_DataCharColors_selected.pdf", 
+           patchwork::wrap_plots(umapColorPlotsLst[c(6, 7, 20, 25, 24, 19)], ncol = 3), 
+           height = 9, width = 15)
+    
+  #   supersets <- list(metabolomics = c("Metabolomics (NMR)", 
+  #                                      "Metabolomics (MS)"),
+  #                     proteomics = c("Proteomics (LFQ, PRIDE)",
+  #                                    "Proteomics (Intensity, PRIDE)",
+  #                                    "Proteomics (iBAQ, PRIDE)",
+  #                                    "Proteomics (Intensity, Expression Atlas)", 
+  #                                    "Proteomics (iBAQ, Expression Atlas)"),
+  #                     transcriptomics = c("RNA-seq (raw)",
+  #                                         "RNA-seq (FPKM)",
+  #                                         "RNA-seq (TPM)",
+  #                                         "Microarray"),
+  #                     sc = c("scProteomics",
+  #                            "scRNA-seq (unnormalized)",
+  #                            "scRNA-seq (normalized)",
+  #                            "Microbiome"))
+  #   
+ 
+
+  }
 }
 
 session <- sessionInfo()
