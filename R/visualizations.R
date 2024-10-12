@@ -7,12 +7,16 @@ library(GGally)
 library(ggforce)
 library(stringr)
 library(tibble)
+
+# devtools::install_github("vqv/ggbiplot")
 library(ggbiplot)
 theme_set(theme_bw())
 
 library(patchwork)
 library(plotly)
 library(htmlwidgets)
+
+library(pcaMethods)
 ################################################################################
 ################################################################################
 # FUNCTIONS
@@ -244,9 +248,9 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
   
   # For nipals:
   # row.names(PCA.data)[which(PCA.data$PC2<(-5) | PCA.data$PC2>10.3)] 
-  # # [1] "MTBLS2801_m_MTBLS2801_LC-MS_negative_reverse-phase_metabolite_profiling_v2_maf.tsv"
-  # # [2] "MTBLS2801_m_MTBLS2801_LC-MS_positive_reverse-phase_metabolite_profiling_v2_maf.tsv"
-  # # [3] "MTBLS4186_m_MTBLS4186_LC-MS_positive_reverse-phase_metabolite_profiling_v2_maf.tsv"
+  # [1] "MTBLS2801_m_MTBLS2801_LC-MS_negative_reverse-phase_metabolite_profiling_v2_maf.tsv"
+  # [2] "MTBLS2801_m_MTBLS2801_LC-MS_positive_reverse-phase_metabolite_profiling_v2_maf.tsv"
+  # [3] "MTBLS4186_m_MTBLS4186_LC-MS_positive_reverse-phase_metabolite_profiling_v2_maf.tsv"
   
   # For svd:
   # row.names(PCA.data)[which(PCA.data$PC2<(-5) | PCA.data$PC2>10.3)] 
@@ -255,7 +259,7 @@ plotPCABiplot <- function(df, groups= c(), alpha = 0.5,
   # [3] "MTBLS2801_m_MTBLS2801_LC-MS_positive_reverse-phase_metabolite_profiling_v2_maf.tsv"
   # [4] "MTBLS4186_m_MTBLS4186_LC-MS_negative_reverse-phase_metabolite_profiling_v2_maf.tsv"
   # [5] "MTBLS4186_m_MTBLS4186_LC-MS_positive_reverse-phase_metabolite_profiling_v2_maf.tsv"
-  # [6] "E-MTAB-7869.aggregated_filtered_counts.mtx"   
+  # [6] "E-MTAB-7869.aggregated_filtered_counts.mtx" 
   
   if (facetZoom) {
     P2 <- P2 + ggforce::facet_zoom(xlim = c(xlimLower, xlimUpper), 
@@ -285,12 +289,13 @@ plotPCABiplots <- function(df, groupColName = "", addStr = "",
                           coordRatio = 0.5,
                           xlimLower = NA, xlimUpper = NA,
                           ylimLower = NA, ylimUpper = NA,
-                          plotWidth = 11, plotheight = 9,
+                          plotWidth = 12, plotheight = 9,
                           axisLabelSize = 10,
                           axisTitleSize = 12) {
   
   customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
                     "Metabolomics (MS)" = "#0033CC",
+                    "Lipidomics (MS)" = "#000000",
                     
                     "Proteomics (LFQ, PRIDE)" = "#800000",
                     "Proteomics (Intensity, PRIDE)" =  "#DC143C",
@@ -381,6 +386,7 @@ plotUMAPplots <- function(df, groupColName = "", addStr = "", pointAlpha = 1,
   
   customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
                     "Metabolomics (MS)" = "#0033CC",
+                    "Lipidomics (MS)" = "#000000",
                     
                     "Proteomics (LFQ, PRIDE)" = "#800000",
                     "Proteomics (Intensity, PRIDE)" =  "#DC143C",
@@ -448,13 +454,13 @@ plotUMAPplots <- function(df, groupColName = "", addStr = "", pointAlpha = 1,
   
   
   umapDataTypes <- list(
-    umapDataTypes[[1]], umapDataTypes[[2]], 
-    patchwork::plot_spacer(), patchwork::plot_spacer(), patchwork::plot_spacer(),
-    umapDataTypes[[3]], umapDataTypes[[4]], umapDataTypes[[5]],
-    umapDataTypes[[6]], umapDataTypes[[7]],
-    umapDataTypes[[8]], umapDataTypes[[9]], umapDataTypes[[10]], umapDataTypes[[11]],
+    umapDataTypes[[1]], umapDataTypes[[2]], umapDataTypes[[3]],
+    patchwork::plot_spacer(), patchwork::plot_spacer(), 
+    umapDataTypes[[4]], umapDataTypes[[5]], umapDataTypes[[6]],
+    umapDataTypes[[7]], umapDataTypes[[8]],
+    umapDataTypes[[9]], umapDataTypes[[10]], umapDataTypes[[11]], umapDataTypes[[12]],
     patchwork::plot_spacer(),
-    umapDataTypes[[12]], umapDataTypes[[13]], umapDataTypes[[14]], umapDataTypes[[15]])
+    umapDataTypes[[13]], umapDataTypes[[14]], umapDataTypes[[15]], umapDataTypes[[16]])
   ggsave(file = paste0("umap_Dim1vsDim2_", addStr, "_dataTypes.pdf"), 
          patchwork::wrap_plots(umapDataTypes, ncol = 5), 
          width = 20, height = 12)
@@ -478,11 +484,11 @@ plotUMAPplots <- function(df, groupColName = "", addStr = "", pointAlpha = 1,
       ggplot2::theme(legend.title = element_blank())
   }
   
-  pdf(file = paste0("umap_Dim1vsDim2_", addStr, ".pdf"), width = 11, height = 9)
+  pdf(file = paste0("umap_Dim1vsDim2_", addStr, ".pdf"), width = 12, height = 9)
   print(gg12)
   dev.off()
   
-  pdf(file = paste0("umap_Dim2vsDim3_", addStr, ".pdf"), width = 11, height = 9)
+  pdf(file = paste0("umap_Dim2vsDim3_", addStr, ".pdf"), width = 12, height = 9)
   print(gg23)
   dev.off()
   
@@ -662,6 +668,13 @@ metabolomicsTranslation.df <- metabolomicsTranslation.df %>%
 metabolomicsTranslation.df[
   metabolomicsTranslation.df$accession %in% 
     c("MTBLS440", "MTBLS728"),]$dataTypeSubgroupsNew <- "metabolomics_MS_LC"
+
+
+metabolomicsTranslation.df[
+  metabolomicsTranslation.df$datasetID %in% 
+    c("MTBLS103_m_ibanez_02_metabolite_profiling_mass_spectrometry_v2_maf.tsv", 
+      "MTBLS794_m_mitochondrial_deficiency_metabolite_profiling_mass_spectrometry_v2_maf.tsv"),]$dataTypeSubgroupsNew <- "metabolomics_MS_LC"
+
 dataset <- dataset %>%
   dplyr::mutate(
     dataTypeSubgroups = case_when(
@@ -670,6 +683,7 @@ dataset <- dataset %>%
           datasetID, metabolomicsTranslation.df$datasetID)],
       TRUE ~ dataTypeSubgroups)
   )
+
 
 # Remove outliers: 
 # E-GEOD-152766.aggregated_filtered_counts.mtx, (also E-GEOD-152766.aggregated_filtered_normalised_counts.mtx to make
@@ -721,8 +735,38 @@ data <- data[!(
       "PXD021882_proteinGroups.txt_^Intensity_",
       "MTBLS103_m_ibanez_02_metabolite_profiling_mass_spectrometry_v2_maf.tsv")),]
 
+
+# occurrences <- data %>%
+#   group_by(across(-c(datasetID, dataTypeSubgroups))) %>%
+#   summarise(Occurrences = n(), .groups = "drop")
+# 
+# result <- data %>%
+#   left_join(occurrences, by = setdiff(names(data), c("datasetID", "dataTypeSubgroups")))
+# result <- result %>%
+#   select(datasetID, dataTypeSubgroups, Occurrences)
+
+
 ##  Duplicate rows removed
 data <- data[-which(duplicated(data %>% dplyr::select(-datasetID))), ]
+
+# Add lipidomics MS information
+lipidomicsDatasets <- read.csv("lipidomicsMSDatasets.csv")$lipidomicsDatasets
+
+data <- data %>%
+  mutate(
+    dataType = ifelse(datasetID %in% lipidomicsDatasets, 
+                      gsub("metabolomics", "lipidomics", dataType), 
+                      dataType),
+    dataTypeSubgroups = ifelse(datasetID %in% lipidomicsDatasets, 
+                               gsub("metabolomics", "lipidomics", dataTypeSubgroups), 
+                               dataTypeSubgroups)
+  )
+
+# Add lipidomics NMR information
+data[data$datasetID == "MTBLS1894_m_MTBLS1894_organic_NMR_metabolite_profiling_v2_maf.tsv",]$dataType <- "lipidomics_NMR"
+data[data$datasetID == "MTBLS1894_m_MTBLS1894_organic_NMR_metabolite_profiling_v2_maf.tsv",]$dataTypeSubgroups <- "lipidomics_NMR"
+
+
 write.csv(data, "datasets_results.csv", row.names = FALSE)
 
 ################################################################################
@@ -767,7 +811,8 @@ write.csv(data, "datasets_results_clean.csv", row.names = FALSE)
 # Rename Data types
 for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
   if (dataTypeLevel == "dataType") {
-    OldDataTypeNames <- c("metabolomics_MS", "metabolomics_NMR", 
+    OldDataTypeNames <- c("lipidomics_MS", "lipidomics_NMR",
+                          "metabolomics_MS", "metabolomics_NMR", 
                           "microarray", "microbiome", 
                           "proteomics_expressionatlas_iBAQ", 
                           "proteomics_expressionatlas_Intensity", 
@@ -776,7 +821,8 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
                           "RNAseq_fpkms_median", "RNAseq_raw", 
                           "RNAseq_tpms_median", "sc_normalized", 
                           "sc_unnormalized", "scProteomics")
-    NewDataTypeNames <- c("Metabolomics (MS)", "Metabolomics (NMR)", 
+    NewDataTypeNames <- c("Lipidomics (MS)", "Lipidomics (NMR)",
+                          "Metabolomics (MS)", "Metabolomics (NMR)", 
                           "Microarray", "Microbiome", 
                           "Proteomics (iBAQ, Expression Atlas)", 
                           "Proteomics (Intensity, Expression Atlas)", 
@@ -788,6 +834,9 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
                           "scRNA-seq (unnormalized)", "scProteomics")
     levels <- c('Metabolomics (NMR)', 
                 'Metabolomics (MS)',
+                
+                "Lipidomics (NMR)",
+                "Lipidomics (MS)",
                 
                 'Proteomics (LFQ, PRIDE)',
                 'Proteomics (Intensity, PRIDE)',
@@ -807,9 +856,17 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
     )
   } else if (dataTypeLevel == "dataTypeSubgroups") {
     OldDataTypeNames <- c(
-      "metabolomics_MS_LC", "metabolomics_MS_GC", "metabolomics_MS_Undefined", 
-      "metabolomics_MS_DI", "metabolomics_MS_FIA", "metabolomics_NMR", 
-      "metabolomics_MS_CE", "metabolomics_MS_otherIonization", 
+      "lipidomics_NMR", 
+      
+      "lipidomics_MS_LC", "lipidomics_MS_GC", 
+      "lipidomics_MS_DI", "lipidomics_MS_FIA",  
+      "lipidomics_MS_otherIonization", "lipidomics_MS_Undefined",
+      
+      "metabolomics_NMR", 
+      
+      "metabolomics_MS_LC", "metabolomics_MS_GC", 
+      "metabolomics_MS_DI", "metabolomics_MS_FIA", 
+      "metabolomics_MS_CE", "metabolomics_MS_otherIonization", "metabolomics_MS_Undefined", 
       "microarray_Affymetrix", 
       "microarray_Illumina", "microarray_Agilent", "microbiome_16S", 
       "microbiome_WGS", "proteomics_expressionatlas_iBAQ", 
@@ -830,10 +887,18 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
       "sc_normalized_Droplet-based", "sc_unnormalized_SMART-like", 
       "sc_unnormalized_Droplet-based", "scProteomics")
     NewDataTypeNames <- c(
+      "Lipidomics (NMR)", 
+      
+      "Lipidomics (LC-MS)", "Lipidomics (GC-MS)", 
+      "Lipidomics (DI-MS)", "Lipidomics (FIA-MS)",  
+      "Lipidomics (Other ionization-MS)", "Lipidomics (Undefined-MS)",
+      
+      "Metabolomics (NMR)", 
+      
       "Metabolomics (LC-MS)", "Metabolomics (GC-MS)", 
-      "Metabolomics (Undefined-MS)", 
-      "Metabolomics (DI-MS)", "Metabolomics (FIA-MS)", "Metabolomics (NMR)", 
+      "Metabolomics (DI-MS)", "Metabolomics (FIA-MS)", 
       "Metabolomics (CE-MS)", "Metabolomics (Other ionization-MS)", 
+      "Metabolomics (Undefined-MS)", 
       "Microarray (Affymetrix)", 
       "Microarray (Illumina)", "Microarray (Agilent)", "Microbiome (16S)", 
       "Microbiome (WGS)", "Proteomics (iBAQ, Expression Atlas)", 
@@ -864,6 +929,11 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
       "Metabolomics (FIA-MS)", 
       "Metabolomics (CE-MS)", "Metabolomics (Other ionization-MS)", 
       "Metabolomics (Undefined-MS)", 
+      
+      "Lipidomics (NMR)",
+      "Lipidomics (GC-MS)", "Lipidomics (LC-MS)", "Lipidomics (DI-MS)", 
+      "Lipidomics (FIA-MS)",  
+      "Lipidomics (Other ionization-MS)", "Lipidomics (Undefined-MS)",
       
       "Proteomics (LFQ, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Thermo)", 
       "Proteomics (LFQ, PRIDE, Bruker)", 
@@ -975,6 +1045,8 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   data <- data[
     !(data$`Data type` %in% c("Metabolomics (Undefined-MS)",
                               "Metabolomics (Other ionization-MS)",
+                              "Lipidomics (Undefined-MS)",
+                              "Lipidomics (Other ionization-MS)",
                               "Proteomics (iBAQ, PRIDE, Undefined)", 
                               "Proteomics (Intensity, PRIDE, Undefined)", 
                               "Proteomics (LFQ, PRIDE, Undefined)")),]
@@ -1099,10 +1171,10 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
             row.names = FALSE)
   
   if (selectedDataTypeLevel == "Data type") {
-    height <- 14# 12
+    height <- 16# 12
     width <- 15# 18
   } else {
-    height <- 21
+    height <- 24
     width <- 15
   }
   
@@ -1110,6 +1182,7 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
   if (selectedDataTypeLevel == "Data type") {
     customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
                       "Metabolomics (MS)" = "#0033CC",
+                      "Lipidomics (MS)" = "#000000",
                       
                       "Proteomics (LFQ, PRIDE)" = "#800000",
                       "Proteomics (Intensity, PRIDE)" =  "#DC143C",
