@@ -1052,7 +1052,7 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
                               "Proteomics (LFQ, PRIDE, Undefined)")),]
   
   data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5) %>% ungroup
-  
+  data$`Data type` <- droplevels(data$`Data type`)
   ################################################################################
   boxplotCols <- setdiff(
     unique(c("Dataset ID", "Data type", "# Samples", 
