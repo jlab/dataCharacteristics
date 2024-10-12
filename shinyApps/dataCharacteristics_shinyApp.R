@@ -1,4 +1,4 @@
-# setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 library(shiny)
 
@@ -472,6 +472,7 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
   
   customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
                     "Metabolomics (MS)" = "#0033CC",
+                    "Lipidomics (MS)" = "#000000",
                     
                     "Proteomics (LFQ, PRIDE)" = "#800000",
                     "Proteomics (Intensity, PRIDE)" =  "#DC143C",
@@ -522,7 +523,7 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
                            y = newDataset$PC2, 
                            z = newDataset$PC3, 
                            type = "scatter3d", 
-                           mode = "markers", color = I("black"), 
+                           mode = "markers", color = I("#fff100"), 
                            inherit = FALSE, name = "Provided Dataset")
   
   
@@ -636,6 +637,9 @@ integrateNewDataset <- function(mtx,
   levels <- c('Metabolomics (NMR)', 
               'Metabolomics (MS)',
               
+              "Lipidomics (NMR)",
+              "Lipidomics (MS)",
+              
               'Proteomics (LFQ, PRIDE)',
               'Proteomics (Intensity, PRIDE)',
               'Proteomics (iBAQ, PRIDE)',
@@ -694,6 +698,7 @@ getUMAPNewDataset <- function(df, groupColName = "") {
   
   customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
                     "Metabolomics (MS)" = "#0033CC",
+                    "Lipidomics (MS)" = "#000000",
                     
                     "Proteomics (LFQ, PRIDE)" = "#800000",
                     "Proteomics (Intensity, PRIDE)" =  "#DC143C",
@@ -756,7 +761,7 @@ getUMAPNewDataset <- function(df, groupColName = "") {
                            y = newDataset$UMAP2, 
                            z = newDataset$UMAP3, 
                            type = "scatter3d", 
-                           mode = "markers", color = I("black"), 
+                           mode = "markers", color = I("#fff100"), 
                            inherit = FALSE, name = "Provided Dataset")
   fig
 }
@@ -786,13 +791,15 @@ generatePlots <- function(mtx, output, omicsTypes){
   data <- data[!(
     data$`Data type` %in% c("Metabolomics (Undefined-MS)",
                             "Metabolomics (Other ionization-MS)",
+                            "Lipidomics (Undefined-MS)",
+                            "Lipidomics (Other ionization-MS)",
                             "Proteomics (iBAQ, PRIDE, Undefined)", 
                             "Proteomics (Intensity, PRIDE, Undefined)", 
                             "Proteomics (LFQ, PRIDE, Undefined)")),]
   
   data <- data %>% dplyr::group_by(`Data type`) %>% 
     filter(n() > 5 | `Data type` == "newDataset") %>% ungroup
-  
+  data$`Data type` <- droplevels(data$`Data type`)
   ##############################################################################
   boxplotCols <- setdiff(
     unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", 
@@ -942,6 +949,7 @@ ui <- fluidPage(
       radioButtons("omicsTypes", "Omics types",
                    choices =  c('Metabolomics (NMR)', 
                                 'Metabolomics (MS)',
+                                'Lipidomics (MS)',
                                 'Proteomics (LFQ, PRIDE)',
                                 'Proteomics (Intensity, PRIDE)',
                                 'Proteomics (iBAQ, PRIDE)',
@@ -966,18 +974,18 @@ ui <- fluidPage(
       withSpinner(htmlOutput(outputId = "dataCharacteristics"), type = 5),
       hr(),
       h2("How close is provided dataset to selected omics type?"),
-      h3("If dataset lies between the 5th and 95th percentile box is colored green, else red."),
+      h3("If the dataset lies between the 5th and 95th percentile, the box is colored green, else red."),
       withSpinner(plotOutput(outputId = "boxplot", 
                              width = "1100px",height = "500px"),
                   type = 5),
       hr(),
       h2("PCA"),
-      h3("Omics types can be switched on and off by clicking on respective symbol in legend."),
+      h3("Omics types can be switched on and off by clicking on the respective symbol in the legend."),
       withSpinner(plotlyOutput('plotlyPCA', width = "1100px", height = "500px"), 
                   type = 5),
       hr(),
       h2("UMAP"),
-      h3("Omics types can be switched on and off by clicking on respective symbol in legend."),
+      h3("Omics types can be switched on and off by clicking on the respective symbol in the legend."),
       withSpinner(plotlyOutput('plotlyUMAP', width = "1100px", height = "500px"), 
                   type = 5),
       hr(),
