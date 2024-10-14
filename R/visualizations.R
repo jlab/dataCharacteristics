@@ -21,27 +21,6 @@ library(pcaMethods)
 ################################################################################
 # FUNCTIONS
 
-translateTermsInColumns <- function(oldAndID.df, translation.df, 
-                                    oldCol = "old", idCol = "ID", 
-                                    multipleHandling = "Multiple") {
-  replaced <- strsplit(oldAndID.df[,oldCol], ";")
-  for (row in seq(nrow(translation.df))) {
-    replaced <- rapply(replaced, function(x){
-      gsub(paste0("^", translation.df[row, ]$old, "$"),
-           translation.df[row, ]$new, x)
-    }, how = "list")
-  }
-  
-  replaced2 <- rapply(replaced, function(x){ifelse(length(unique(x)) > 1,
-                                                   multipleHandling, unique(x))
-  }, how = "list")
-  
-  replaced2.df <- data.frame(ID = oldAndID.df[,idCol], 
-                             old = oldAndID.df[,oldCol], 
-                             new = unlist(replaced2))
-  replaced2.df
-}
-
 logTransform <- function(df, variable, logBase = c("log2", "log1p")){
   df[[paste0(logBase, "(", variable, ")")]] <- get(logBase)(df[[variable]])
   df[[variable]] <- NULL
@@ -337,43 +316,6 @@ plotPCABiplots <- function(df, groupColName = "", addStr = "",
                          method = pcaMethod, nPcs = 4, center = TRUE
                          , scale = "uv")
   write.csv(pca@loadings, paste0("loadings_",  pcaMethod, "_", addStr,".csv"))
-  # dat <- merge(pcaMethods::scores(pca), df, by = 0)
-  # 
-  # pdf(paste0("ggpairs_", pcaMethod, "_", addStr, ".pdf"), 
-  #     width = 12, height = 10)
-  # print(GGally::ggpairs(dat, 
-  #                       columns = 2:5, ggplot2::aes(colour = get(groupColName)),
-  #                       lower = list(
-  #                         continuous = wrap("smooth", alpha = 0.3, size = 1),
-  #                         combo = wrap("dot_no_facet", alpha = 0.4)),
-  #                       upper = list(continuous = wrap("cor", 
-  #                                                      method = "spearman", 
-  #                                                      size = 3)),
-  #                       mapping = aes(color = get(groupColName),
-  #                                     fill = get(groupColName), 
-  #                                     alpha = 0.5)) +
-  #         ggtitle(groupColName) +
-  #         theme_bw())
-  # dev.off()
-  # 
-  # fig <- plotly::plot_ly(dat, x = ~PC1, y = ~PC2, z = ~PC3, 
-  #                        color = ~as.factor(dat[[groupColName]]), 
-  #                        type = "scatter3d", mode = "markers",
-  #                        #colors = c('#636EFA','#EF553B') , 
-  #                        marker = list(size = 2)
-  #                        # , alpha = 0.75
-  # ) #%>%
-  # # add_markers(size = 5, marker=list(sizeref=8, sizemode="area"))
-  # fig <- fig %>%
-  #   plotly::layout(
-  #     title = "3D PCA",
-  #     scene = list(bgcolor = "#e5ecf6"
-  #     )
-  #   )
-  # 
-  # htmlwidgets::saveWidget(fig, 
-  #                         paste0("plotly_", pcaMethod, "_", addStr,".html"), 
-  #                         selfcontained = F, libdir = "lib")
 }
 
 
@@ -599,28 +541,36 @@ write.csv(data.frame(instrument = sort(
           "proteomicsPride_instruments.csv",
           row.names = FALSE)
 
-prideMetaInstrumentsManufacturerAdded.df <- read.csv(
-  "proteomicsPride_instruments_manufacturers.csv")
+proteomics.replaced <- strsplit(prideMeta.df.forIncludedPrideIDs$instruments, ";")
 
-prideTranslation.df <- translateTermsInColumns(
-  oldAndID.df = prideMeta.df.forIncludedPrideIDs, 
-  translation.df = prideMetaInstrumentsManufacturerAdded.df %>%
-    dplyr::rename("old" = "instrument", "new" = "manufacturer"), 
-  oldCol = "instruments", idCol = "prideID", 
-  multipleHandling = "Multiple")
+proteomics.replaced2 <- rapply(proteomics.replaced, function(x){
+  x[grepl("Q Exactive", x)] <- "QExactive"
+  x[grepl("Orbitrap", x)] <- "Orbitrap"
+  x[grepl("timsTOF", x)] <- "timsTOF"
+  x[grepl("TripleTOF", x)] <- "TripleTOF"
+  x <- sort(unique(x))
+  x
+}, how = "list") 
 
-colnames(prideTranslation.df) <- c("prideID", "instrument", "manufacturer")
+replaced2 <- lapply(proteomics.replaced2, function(x) paste0(x, collapse = ";"))
 
-prideMeta.df.forIncludedPrideIDs <- dplyr::left_join(
-  prideMeta.df.forIncludedPrideIDs, prideTranslation.df, by = join_by(prideID))
+proteomicsReplaced.df <- data.frame(technology = unlist(replaced2))
+  
+proteomicsReplaced.df$technology[grepl(";", proteomicsReplaced.df$technology)] <- 'Multiple'  
+
+proteomicsReplaced.df$technology[
+  proteomicsReplaced.df$technology %in% 
+    names(which(table(proteomicsReplaced.df$technology) < 6))] <- 'Other'  
+
+proteomicsReplaced.df <- data.frame(prideID = prideMeta.df.forIncludedPrideIDs$prideID, technology = proteomicsReplaced.df$technology)
 
 dataset <- dataset %>% 
   dplyr::mutate(dataTypeSubgroups = case_when(
     grepl("_pride_", dataType) ~ 
       paste0(dataTypeSubgroups, "_", 
-             prideMeta.df.forIncludedPrideIDs$manufacturer[
+             proteomicsReplaced.df$technology[
                match(sub("^(.*?)_.*$", "\\1", datasetID), 
-                     prideMeta.df.forIncludedPrideIDs$prideID)]),
+                     proteomicsReplaced.df$prideID)]),
     TRUE ~ dataTypeSubgroups)
   )
 
@@ -632,6 +582,33 @@ metabolomicsDatasets <- dataset %>%
   dplyr::left_join(metabolomicsMeta.df, by = join_by(accession == accession))
 
 replaced <- strsplit(metabolomicsDatasets$technology, ";")
+
+replacedTechnologies <- rapply(replaced, function(x){
+  x[grepl("-(qTOF|TOF)-", x, ignore.case = TRUE)] <- "TOF"
+  x[grepl("-(LTQ)-", x, ignore.case = TRUE)] <- "LTQ"
+  x[grepl("-(TQ)-", x, ignore.case = TRUE)] <- "TQ"
+  x[grepl("-(Q)-", x, ignore.case = TRUE)] <- "Q"
+  x[grepl("-(FT-ICR)-", x, ignore.case = TRUE)] <- "FTICR"  
+  x[grepl("UPLC-MS", x, ignore.case = TRUE)] <- NA  
+  x[grepl("Insufficient data supplied", x)] <- NA
+  x[grepl("NMR", x)] <- NA
+  x <- sort(unique(x))
+  x
+}, how = "list") 
+
+replacedTechnologies <- lapply(replacedTechnologies, function(x) paste0(x, collapse = ";"))
+
+
+replacedTechnologies.df <- data.frame(technology = unlist(replacedTechnologies))
+replacedTechnologies.df$technology[is.na(replacedTechnologies.df$technology) | replacedTechnologies.df$technology == ""] <- "Undefined"
+replacedTechnologies.df$technology[grepl(";", replacedTechnologies.df$technology)] <- 'Multiple'  
+replacedTechnologies.df$technology[
+  replacedTechnologies.df$technology %in% 
+    names(which(table(replacedTechnologies.df$technology) < 6))] <- 'Other'  
+
+#metabolomicsDatasets$technology3<- replacedTechnologies.df$technology
+
+
 
 replaced2 <- rapply(replaced, function(x){
   x[grepl("LC|UPLD", x)] <- "LC"
@@ -650,8 +627,10 @@ replaced2 <- lapply(replaced2, function(x) paste0(x, collapse = ";"))
 
 metabolomicsTranslation.df <- cbind(
   metabolomicsDatasets %>% dplyr::select(- dataType, accession), 
-  technology2 = unlist(replaced2))
+  technology2 = unlist(replaced2),
+  technology3 = replacedTechnologies.df$technology)
 
+"Fill information from met data if not present in file name"
 metabolomicsTranslation.df[grepl(
   ";", metabolomicsTranslation.df$technology2) | 
     metabolomicsTranslation.df$technology2 == "", ]$technology2 <- NA
@@ -662,6 +641,8 @@ metabolomicsTranslation.df <- metabolomicsTranslation.df %>%
         !is.na(technology2) ~ paste0("metabolomics_MS_", technology2), 
       TRUE ~ dataTypeSubgroups)
 )
+
+
 
 # MTBLS440 --> LC
 # MTBLS728 --> LC
@@ -675,11 +656,23 @@ metabolomicsTranslation.df[
     c("MTBLS103_m_ibanez_02_metabolite_profiling_mass_spectrometry_v2_maf.tsv", 
       "MTBLS794_m_mitochondrial_deficiency_metabolite_profiling_mass_spectrometry_v2_maf.tsv"),]$dataTypeSubgroupsNew <- "metabolomics_MS_LC"
 
+metabolomicsTranslation.df$dataTypeSubgroupsNew2 <- paste0(metabolomicsTranslation.df$dataTypeSubgroupsNew, "_", metabolomicsTranslation.df$technology3)
+metabolomicsTranslation.df$dataTypeSubgroupsNew2[grepl("metabolomics_NMR", metabolomicsTranslation.df$dataTypeSubgroupsNew2)] <-
+  "metabolomics_NMR"
+metabolomicsTranslation.df$dataTypeSubgroupsNew2[
+  !grepl("NMR|GC|LC", metabolomicsTranslation.df$dataTypeSubgroupsNew2) |
+    grepl("Undefined|Multiple|Other", metabolomicsTranslation.df$dataTypeSubgroupsNew2) |
+    (metabolomicsTranslation.df$dataTypeSubgroupsNew2 %in% 
+       names(which(table(metabolomicsTranslation.df$dataTypeSubgroupsNew2) < 6)))
+  ] <-
+  "metabolomics_MS_Other"
+
+
 dataset <- dataset %>%
   dplyr::mutate(
     dataTypeSubgroups = case_when(
       grepl("metabolomics_", dataType) ~ 
-        metabolomicsTranslation.df$dataTypeSubgroupsNew[match(
+        metabolomicsTranslation.df$dataTypeSubgroupsNew2[match(
           datasetID, metabolomicsTranslation.df$datasetID)],
       TRUE ~ dataTypeSubgroups)
   )
@@ -724,7 +717,10 @@ dataDiff <- data[data$datasetID %in% setdiff(
 # "PXD021882_proteinGroups.txt_^Intensity_"
 
 # Remove as it has duplicate in different category
-# "MTBLS103_m_ibanez_02_metabolite_profiling_mass_spectrometry_v2_maf.tsv"
+# "MTBLS555_m_test_131017_metabolite_profiling_mass_spectrometry_v2_maf.tsv"
+# "PXD019903_proteinGroups.txt_^LFQ_"                                       
+# "PXD019903_proteinGroups.txt_^iBAQ_"                                      
+# "PXD019903_proteinGroups.txt_^Intensity_"   
 
 data <- data[!(
   data$datasetID %in% 
@@ -733,7 +729,11 @@ data <- data[!(
       "PXD006847_CulturedCells_proteinGroups.txt_^Intensity_",
       "PXD021882_proteinGroups.txt_^LFQ_",
       "PXD021882_proteinGroups.txt_^Intensity_",
-      "MTBLS103_m_ibanez_02_metabolite_profiling_mass_spectrometry_v2_maf.tsv")),]
+      # "MTBLS103_m_ibanez_02_metabolite_profiling_mass_spectrometry_v2_maf.tsv",
+      "MTBLS555_m_test_131017_metabolite_profiling_mass_spectrometry_v2_maf.tsv",
+      "PXD019903_proteinGroups.txt_^LFQ_",                                      
+      "PXD019903_proteinGroups.txt_^iBAQ_",                                      
+      "PXD019903_proteinGroups.txt_^Intensity_")),]
 
 
 # occurrences <- data %>%
@@ -857,29 +857,32 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
   } else if (dataTypeLevel == "dataTypeSubgroups") {
     OldDataTypeNames <- c(
       "lipidomics_NMR", 
-      
-      "lipidomics_MS_LC", "lipidomics_MS_GC", 
-      "lipidomics_MS_DI", "lipidomics_MS_FIA",  
-      "lipidomics_MS_otherIonization", "lipidomics_MS_Undefined",
+      "lipidomics_MS_LC_TOF", "lipidomics_MS_LC_LTQ", "lipidomics_MS_LC_TQ", 
+      "lipidomics_MS_GC_TOF", "lipidomics_MS_GC_Q",
+      "lipidomics_MS_Other",
       
       "metabolomics_NMR", 
+      "metabolomics_MS_LC_TOF", "metabolomics_MS_LC_LTQ", "metabolomics_MS_LC_TQ",
+      "metabolomics_MS_GC_TOF", "metabolomics_MS_GC_TQ",  "metabolomics_MS_GC_Q",                            
+      "metabolomics_MS_Other", 
       
-      "metabolomics_MS_LC", "metabolomics_MS_GC", 
-      "metabolomics_MS_DI", "metabolomics_MS_FIA", 
-      "metabolomics_MS_CE", "metabolomics_MS_otherIonization", "metabolomics_MS_Undefined", 
       "microarray_Affymetrix", 
       "microarray_Illumina", "microarray_Agilent", "microbiome_16S", 
       "microbiome_WGS", "proteomics_expressionatlas_iBAQ", 
       "proteomics_expressionatlas_Intensity", 
-      "proteomics_expressionatlas_LFQ", "proteomics_pride_LFQ_Thermo", 
-      "proteomics_pride_Intensity_Thermo", "proteomics_pride_iBAQ_Thermo", 
-      "proteomics_pride_LFQ_Multiple", "proteomics_pride_iBAQ_Multiple", 
-      "proteomics_pride_Intensity_Multiple", 
-      "proteomics_pride_Intensity_Bruker", 
-      "proteomics_pride_LFQ_Agilent", "proteomics_pride_Intensity_Agilent", 
-      "proteomics_pride_LFQ_Bruker", "proteomics_pride_LFQ_SCIEX", 
-      "proteomics_pride_Intensity_SCIEX", "proteomics_pride_iBAQ_SCIEX", 
-      "proteomics_pride_iBAQ_Bruker", "proteomics_pride_iBAQ_Agilent", 
+      "proteomics_expressionatlas_LFQ", 
+      
+      "proteomics_pride_iBAQ_Multiple", "proteomics_pride_iBAQ_Orbitrap", 
+      "proteomics_pride_iBAQ_Other", "proteomics_pride_iBAQ_QExactive", 
+      "proteomics_pride_iBAQ_timsTOF", "proteomics_pride_iBAQ_TripleTOF", 
+      "proteomics_pride_Intensity_maXis", "proteomics_pride_Intensity_Multiple", 
+      "proteomics_pride_Intensity_Orbitrap", "proteomics_pride_Intensity_Other", 
+      "proteomics_pride_Intensity_QExactive", "proteomics_pride_Intensity_timsTOF", 
+      "proteomics_pride_Intensity_TripleTOF", "proteomics_pride_LFQ_maXis", 
+      "proteomics_pride_LFQ_Multiple", "proteomics_pride_LFQ_Orbitrap", 
+      "proteomics_pride_LFQ_Other", "proteomics_pride_LFQ_QExactive", 
+      "proteomics_pride_LFQ_timsTOF", "proteomics_pride_LFQ_TripleTOF", 
+      
       "RNAseq_fpkms_median", 
       "RNAseq_raw", 
       "RNAseq_tpms_median", 
@@ -887,34 +890,35 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
       "sc_normalized_Droplet-based", "sc_unnormalized_SMART-like", 
       "sc_unnormalized_Droplet-based", "scProteomics")
     NewDataTypeNames <- c(
-      "Lipidomics (NMR)", 
       
-      "Lipidomics (LC-MS)", "Lipidomics (GC-MS)", 
-      "Lipidomics (DI-MS)", "Lipidomics (FIA-MS)",  
-      "Lipidomics (Other ionization-MS)", "Lipidomics (Undefined-MS)",
+      "Lipidomics (NMR)", 
+      "Lipidomics (LC-MS, TOF)", "Lipidomics (LC-MS, LTQ)", "Lipidomics (LC-MS, TQ)", 
+      "Lipidomics (GC-MS, TOF)", "Lipidomics (GC-MS, Q)", 
+      "Lipidomics (MS, Other)",
       
       "Metabolomics (NMR)", 
+      "Metabolomics (LC-MS, TOF)", "Metabolomics (LC-MS, LTQ)", "Metabolomics (LC-MS, TQ)",
+      "Metabolomics (GC-MS, TOF)", "Metabolomics (GC-MS, TQ)", "Metabolomics (GC-MS, Q)",                             
+      "Metabolomics (MS, Other)",
       
-      "Metabolomics (LC-MS)", "Metabolomics (GC-MS)", 
-      "Metabolomics (DI-MS)", "Metabolomics (FIA-MS)", 
-      "Metabolomics (CE-MS)", "Metabolomics (Other ionization-MS)", 
-      "Metabolomics (Undefined-MS)", 
       "Microarray (Affymetrix)", 
       "Microarray (Illumina)", "Microarray (Agilent)", "Microbiome (16S)", 
-      "Microbiome (WGS)", "Proteomics (iBAQ, Expression Atlas)", 
+      "Microbiome (WGS)", 
+      "Proteomics (iBAQ, Expression Atlas)", 
       "Proteomics (Intensity, Expression Atlas)", 
-      "Proteomics (LFQ, Expression Atlas)", "Proteomics (LFQ, PRIDE, Thermo)", 
-      "Proteomics (Intensity, PRIDE, Thermo)", 
-      "Proteomics (iBAQ, PRIDE, Thermo)", 
-      "Proteomics (LFQ, PRIDE, Undefined)", 
-      "Proteomics (iBAQ, PRIDE, Undefined)", 
-      "Proteomics (Intensity, PRIDE, Undefined)", 
-      "Proteomics (Intensity, PRIDE, Bruker)", 
-      "Proteomics (LFQ, PRIDE, Agilent)", 
-      "Proteomics (Intensity, PRIDE, Agilent)", 
-      "Proteomics (LFQ, PRIDE, Bruker)", "Proteomics (LFQ, PRIDE, SCIEX)", 
-      "Proteomics (Intensity, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, SCIEX)", 
-      "Proteomics (iBAQ, PRIDE, Bruker)", "Proteomics (iBAQ, PRIDE, Agilent)", 
+      "Proteomics (LFQ, Expression Atlas)", 
+      
+      "Proteomics (iBAQ, PRIDE, Multiple)", "Proteomics (iBAQ, PRIDE, Orbitrap)", 
+      "Proteomics (iBAQ, PRIDE, Other)", "Proteomics (iBAQ, PRIDE, Q Exactive)", 
+      "Proteomics (iBAQ, PRIDE, timsTOF)", "Proteomics (iBAQ, PRIDE, TripleTOF)", 
+      "Proteomics (Intensity, PRIDE, maXis)", "Proteomics (Intensity, PRIDE, Multiple)",
+      "Proteomics (Intensity, PRIDE, Orbitrap)", "Proteomics (Intensity, PRIDE, Other)",
+      "Proteomics (Intensity, PRIDE, Q Exactive)", "Proteomics (Intensity, PRIDE, timsTOF)",
+      "Proteomics (Intensity, PRIDE, TripleTOF)", "Proteomics (LFQ, PRIDE, maXis)",
+      "Proteomics (LFQ, PRIDE, Multiple)", "Proteomics (LFQ, PRIDE, Orbitrap)",
+      "Proteomics (LFQ, PRIDE, Other)", "Proteomics (LFQ, PRIDE, Q Exactive)",
+      "Proteomics (LFQ, PRIDE, timsTOF)", "Proteomics (LFQ, PRIDE, TripleTOF)",
+      
       "RNA-seq (FPKM)", 
       "RNA-seq (raw)", 
       "RNA-seq (TPM)", 
@@ -925,30 +929,42 @@ for (dataTypeLevel in c("dataType", "dataTypeSubgroups")) {
     
     levels <- c(
       "Metabolomics (NMR)", 
-      "Metabolomics (GC-MS)", "Metabolomics (LC-MS)", "Metabolomics (DI-MS)", 
-      "Metabolomics (FIA-MS)", 
-      "Metabolomics (CE-MS)", "Metabolomics (Other ionization-MS)", 
-      "Metabolomics (Undefined-MS)", 
+      "Metabolomics (GC-MS, TOF)", 
+      "Metabolomics (GC-MS, TQ)", 
+      "Metabolomics (GC-MS, Q)",   
+      "Metabolomics (LC-MS, TOF)", 
+      "Metabolomics (LC-MS, LTQ)", 
+      "Metabolomics (LC-MS, TQ)",
+      "Metabolomics (MS, Other)",
       
-      "Lipidomics (NMR)",
-      "Lipidomics (GC-MS)", "Lipidomics (LC-MS)", "Lipidomics (DI-MS)", 
-      "Lipidomics (FIA-MS)",  
-      "Lipidomics (Other ionization-MS)", "Lipidomics (Undefined-MS)",
+      "Lipidomics (NMR)", 
+      "Lipidomics (GC-MS, TOF)",
+      "Lipidomics (GC-MS, Q)", 
+      "Lipidomics (LC-MS, TOF)",  
+      "Lipidomics (LC-MS, LTQ)", "Lipidomics (LC-MS, TQ)", 
+      "Lipidomics (MS, Other)",
       
-      "Proteomics (LFQ, PRIDE, Agilent)", "Proteomics (LFQ, PRIDE, Thermo)", 
-      "Proteomics (LFQ, PRIDE, Bruker)", 
-      "Proteomics (LFQ, PRIDE, SCIEX)", "Proteomics (LFQ, PRIDE, Undefined)",
+      "Proteomics (LFQ, PRIDE, Orbitrap)", "Proteomics (Intensity, PRIDE, Orbitrap)", 
+      "Proteomics (iBAQ, PRIDE, Orbitrap)", 
       
-      "Proteomics (Intensity, PRIDE, Agilent)", 
-      "Proteomics (Intensity, PRIDE, Thermo)", 
-      "Proteomics (Intensity, PRIDE, Bruker)", 
-      "Proteomics (Intensity, PRIDE, SCIEX)", 
-      "Proteomics (Intensity, PRIDE, Undefined)", 
+      "Proteomics (LFQ, PRIDE, Q Exactive)", "Proteomics (Intensity, PRIDE, Q Exactive)", 
+      "Proteomics (iBAQ, PRIDE, Q Exactive)",
       
-      "Proteomics (iBAQ, PRIDE, Agilent)", "Proteomics (iBAQ, PRIDE, Thermo)", 
-      "Proteomics (iBAQ, PRIDE, Bruker)", 
-      "Proteomics (iBAQ, PRIDE, SCIEX)", "Proteomics (iBAQ, PRIDE, Undefined)", 
+      "Proteomics (LFQ, PRIDE, maXis)", "Proteomics (Intensity, PRIDE, maXis)", 
       
+      "Proteomics (LFQ, PRIDE, TripleTOF)", "Proteomics (Intensity, PRIDE, TripleTOF)", 
+      "Proteomics (iBAQ, PRIDE, TripleTOF)",  
+      
+      "Proteomics (LFQ, PRIDE, timsTOF)", "Proteomics (Intensity, PRIDE, timsTOF)",
+      "Proteomics (iBAQ, PRIDE, timsTOF)", 
+      
+      "Proteomics (LFQ, PRIDE, Multiple)", "Proteomics (Intensity, PRIDE, Multiple)",
+      "Proteomics (iBAQ, PRIDE, Multiple)", 
+      
+      "Proteomics (LFQ, PRIDE, Other)", 
+      "Proteomics (Intensity, PRIDE, Other)",
+      "Proteomics (iBAQ, PRIDE, Other)",  
+
       "Proteomics (LFQ, Expression Atlas)", 
       "Proteomics (Intensity, Expression Atlas)", 
       "Proteomics (iBAQ, Expression Atlas)",
@@ -1043,13 +1059,15 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
       !!allDataTypeLevels, !!selectedDataTypeLevel)) %>% 
     dplyr::rename("Data type" = !!selectedDataTypeLevel)
   data <- data[
-    !(data$`Data type` %in% c("Metabolomics (Undefined-MS)",
-                              "Metabolomics (Other ionization-MS)",
-                              "Lipidomics (Undefined-MS)",
-                              "Lipidomics (Other ionization-MS)",
-                              "Proteomics (iBAQ, PRIDE, Undefined)", 
-                              "Proteomics (Intensity, PRIDE, Undefined)", 
-                              "Proteomics (LFQ, PRIDE, Undefined)")),]
+    !(data$`Data type` %in% c("Metabolomics (MS, Other)",
+                              "Lipidomics (MS, Other)",
+                              "Proteomics (LFQ, PRIDE, Multiple)", 
+                              "Proteomics (LFQ, PRIDE, Other)", 
+                              "Proteomics (Intensity, PRIDE, Multiple)",
+                              "Proteomics (Intensity, PRIDE, Other)",
+                              "Proteomics (iBAQ, PRIDE, Multiple)", 
+                              "Proteomics (iBAQ, PRIDE, Other)"
+                              )),]
   
   data <- data %>% dplyr::group_by(`Data type`) %>% filter(n() > 5) %>% ungroup
   data$`Data type` <- droplevels(data$`Data type`)
@@ -1174,8 +1192,8 @@ for (selectedDataTypeLevel in allDataTypeLevels) {
     height <- 16# 12
     width <- 15# 18
   } else {
-    height <- 24
-    width <- 15
+    height <- 28
+    width <- 19
   }
   
   customColors <- c()
