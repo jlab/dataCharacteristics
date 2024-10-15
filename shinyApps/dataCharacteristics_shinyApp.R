@@ -788,14 +788,16 @@ generatePlots <- function(mtx, output, omicsTypes){
   mtx <- NULL
   gc()
   
-  data <- data[!(
-    data$`Data type` %in% c("Metabolomics (Undefined-MS)",
-                            "Metabolomics (Other ionization-MS)",
-                            "Lipidomics (Undefined-MS)",
-                            "Lipidomics (Other ionization-MS)",
-                            "Proteomics (iBAQ, PRIDE, Undefined)", 
-                            "Proteomics (Intensity, PRIDE, Undefined)", 
-                            "Proteomics (LFQ, PRIDE, Undefined)")),]
+  data <- data[
+    !(data$`Data type` %in% c("Metabolomics (MS, Other)",
+                              "Lipidomics (MS, Other)",
+                              "Proteomics (LFQ, PRIDE, Multiple)", 
+                              "Proteomics (LFQ, PRIDE, Other)", 
+                              "Proteomics (Intensity, PRIDE, Multiple)",
+                              "Proteomics (Intensity, PRIDE, Other)",
+                              "Proteomics (iBAQ, PRIDE, Multiple)", 
+                              "Proteomics (iBAQ, PRIDE, Other)"
+    )),]
   
   data <- data %>% dplyr::group_by(`Data type`) %>% 
     filter(n() > 5 | `Data type` == "newDataset") %>% ungroup
@@ -973,7 +975,7 @@ ui <- fluidPage(
       h2("Data characteristics:"),
       withSpinner(htmlOutput(outputId = "dataCharacteristics"), type = 5),
       hr(),
-      h2("How close is provided dataset to selected omics type?"),
+      h2("How close is the provided dataset to the selected omics type?"),
       h3("If the dataset lies between the 5th and 95th percentile, the box is colored green, else red."),
       withSpinner(plotOutput(outputId = "boxplot", 
                              width = "1100px",height = "500px"),
