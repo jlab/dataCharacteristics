@@ -56,10 +56,17 @@ plotBoxplots <- function(mtx, plotTitle = "", plotSubtitle = "",
   print(gg)
 }
 
-plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "", 
+plotCorrelation <- function(mtx.corr, NAval = NA, plotTitle = "", plotSubtitle = "", 
                             ySampleMeanMin = NULL, ySampleMeanMax = NULL) {
   colMeans <- colMeans(mtx.corr, na.rm = TRUE)
-  colNaPercentage <- colMeans(is.na(mtx.corr))*100
+  
+  if (is.na(NAval)) {
+    colNaPercentage <- colMeans(is.na(mtx.corr)) * 100
+    xlab <- "NA Percentage in Sample"
+  } else {
+    colNaPercentage <- colMeans(mtx.corr == 0) * 100
+    xlab <- "Zero Percentage in Sample"
+  }
   
   corRes <- cor.test(colMeans, colNaPercentage, method = "spearman")
   corrPlot <- ggplot(data.frame(colNaPercentage, colMeans), 
@@ -68,7 +75,7 @@ plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "",
     geom_smooth(method = "lm") +
     # ggpubr::theme_pubr() +
     theme_bw() +
-    labs(x = "NA Percentage in Sample", y = "Sample Mean") +
+    labs(x = xlab, y = "Sample Mean") +
     ggtitle(plotTitle, subtitle = plotSubtitle) +
     xlim(0, 100) 
   
@@ -81,22 +88,39 @@ plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "",
   print(corrPlot)
 }
 
-plotProbability <- function(mtx, plotTitle = "", 
+plotProbability <- function(mtx, NAval = NA, plotTitle = "", 
                             plotSubtitle = "", withLegend = FALSE) {
-  mtx <- mtx[rowSums(is.na(mtx)) != ncol(mtx), ]
-  mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
   
+  if (is.na(NAval)) {
+    mtx <- mtx[rowSums(is.na(mtx)) != ncol(mtx), ]
+    mtx <- mtx[, colSums(is.na(mtx)) != nrow(mtx)]
+  } else {
+    mtx <- mtx[rowSums(mtx == 0) != ncol(mtx), ]
+    mtx <- mtx[, colSums(mtx == 0) != nrow(mtx)]
+  }
+
   data.long <- reshape2::melt(mtx)
   colnames(data.long) <- c("Feature", "Sample", "Value")
-  data.long$isNA <- as.integer(is.na(data.long$Value))
   
+  if (is.na(NAval)) {
+    data.long$isNA <- as.integer(is.na(data.long$Value))
+  } else {
+    data.long$isNA <- as.integer(data.long$Value == 0)
+  }
+
   library(speedglm)
   lmModel <- speedglm::speedlm(Value ~ Feature + Sample, data = data.long,
                                fitted = TRUE)
   # predicted <- predict(lmModel, data = data.long)
   
   imputed <- data.long$Value
-  imputed[is.na(imputed)] <- lmModel$fitted.values[is.na(imputed)]
+  
+  if (is.na(NAval)) {
+    imputed[is.na(imputed)] <- lmModel$fitted.values[is.na(imputed)]
+  } else {
+    imputed[imputed == 0] <- lmModel$fitted.values[imputed == 0]
+  }
+  
   data.long$imputed <- imputed
   
   glmModel <- speedglm::speedglm(isNA ~ imputed + Sample, 
@@ -105,10 +129,17 @@ plotProbability <- function(mtx, plotTitle = "",
   
   data.long$prob <- c(predict(glmModel, type = "response"))
   
-  
-  data.long.95Quantile <- data.long %>% 
-    mutate(imputed = ifelse(imputed > quantile(imputed, .95), NA, imputed)) %>%
-    dplyr::filter(!is.na(imputed))
+  if (is.na(NAval)) {
+    data.long.95Quantile <- data.long %>% 
+      mutate(imputed = ifelse(imputed > quantile(imputed, .95), NA, imputed)) %>%
+      dplyr::filter(!is.na(imputed))
+    ylab <- "NA Probability"
+  } else {
+    data.long.95Quantile <- data.long %>% 
+      mutate(imputed = ifelse(imputed > quantile(imputed, .95), NA, imputed)) %>%
+      dplyr::filter(imputed != 0)
+    ylab <- "Zero Probability"
+  }
   
   # plot(data.long$imputed, data.long$prob)
   
@@ -118,7 +149,7 @@ plotProbability <- function(mtx, plotTitle = "",
     geom_point(size = 1, alpha = 0.5) +
     theme_bw() +
     xlab("Intensity") +
-    ylab("NA Probability") +
+    ylab(ylab) +
     ggtitle(plotTitle, subtitle = plotSubtitle) +
     ylim(c(0, 1))
   
@@ -277,6 +308,13 @@ runQuantileNormalization <- function(mtx){
 
 generateMatrices <- function(input, seed, saveParameters = FALSE) {
   
+  NAval <- input$NAval
+  if (NAval == "NA") {
+    NAval <- NA
+  } else {
+    NAval <- 0
+  }
+  
   nSamples <- input$nSamples #30
   nAnalytes <- input$nAnalytes  #3000
   
@@ -293,7 +331,8 @@ generateMatrices <- function(input, seed, saveParameters = FALSE) {
            "\nnAnalytes: ", nAnalytes, 
            "\nq50: ", q50, "\nq90: ", q90, "\nqSD: ", qSD, "\nmean: ", mean, 
            "\nsd: ", sd, "\nsdSamples: ", sdSamples, 
-           "\nsdFeatures: ", sdFeatures), 
+           "\nsdFeatures: ", sdFeatures,
+           "\nNAval: ", NAval), 
     paste0("parameters_Seed", seed, ".txt"))
   
   dat <- msb.simulateOmicsNormallyDistributed(nFeatures = nAnalytes, 
@@ -307,11 +346,17 @@ generateMatrices <- function(input, seed, saveParameters = FALSE) {
   
   dat2 <- msb.applyDetectionLimit(dat, 
                                   q50 = q50, q90 = q90, qSD = qSD, 
-                                  doPlot = FALSE)
+                                  doPlot = FALSE,
+                                  NAval = NAval)
   
-  idxNA <- sample(seq(length(dat2$dat)), sum(is.na(dat2$datNA)))
+  if (is.na(NAval)) {
+    idxNA <- sample(seq(length(dat2$dat)), sum(is.na(dat2$datNA)))
+  } else {
+    idxNA <- sample(seq(length(dat2$dat)), sum(dat2$datNA == 0))
+  }
+  
   datRandomNA <- dat2$dat
-  datRandomNA[idxNA] <- NA
+  datRandomNA[idxNA] <- NAval
   
   # dat.norm <- runQuantileNormalization(dat)
   
@@ -336,6 +381,13 @@ generateMatrices <- function(input, seed, saveParameters = FALSE) {
 # }
 
 generatePlots <- function(input, mtxs, output, seed) {
+  NAval <- input$NAval
+  
+  if (NAval == "NA") {
+    NAval <- NA
+  } else {
+    NAval <- 0
+  }
   
   # savePlots <- input$savePlots
   yValueMin <- min(c(c(mtxs$dat), c(mtxs$datThrNA), c(mtxs$datRandomNA)), 
@@ -368,34 +420,40 @@ generatePlots <- function(input, mtxs, output, seed) {
                         yValueMin = yValueMin, yValueMax = yValueMax)
     
     pt4 <- plotCorrelation(mtx.corr = mtxs$dat, 
+                           NAval = NAval,
                            # plotTitle = "No NAs",
                            plotTitle = "",
                            plotSubtitle = "Points correspond to samples"
     )
     
     pt5 <- plotCorrelation(mtx.corr = mtxs$datThrNA, 
+                           NAval = NAval,
                            # plotTitle = "Detection limit-related NAs",
                            plotTitle = "",
                            plotSubtitle = "Points correspond to samples" 
     )
     
     pt6 <- plotCorrelation(mtx.corr = mtxs$datRandomNA, 
+                           NAval = NAval,
                            # plotTitle = "Random NAs",
                            plotTitle = "",
                            plotSubtitle = "Points correspond to samples"
     )
     
     pt7 <- plotProbability(mtx = mtxs$dat, 
+                           NAval = NAval,
                            # plotTitle = "No NAs",
                            plotTitle = "",
                            plotSubtitle = "Points correspond to data points")
     
     pt8 <- plotProbability(mtx = mtxs$datThrNA, 
+                           NAval = NAval,
                            # plotTitle = "Detection limit-related NAs",
                            plotTitle = "",
                            plotSubtitle = "Points correspond to data points")
     
     pt9 <- plotProbability(mtx = mtxs$datRandomNA, 
+                           NAval = NAval,
                            # plotTitle = "Random NAs",
                            plotTitle = "",
                            plotSubtitle = "Points correspond to data points")
@@ -421,13 +479,14 @@ generatePlots <- function(input, mtxs, output, seed) {
     
     ptlist <- list(pt1, pt2, pt3, pt4, pt5, pt6, pt7, pt8, pt9, pt10, 
                    pt11, pt12)
-    names(ptlist) <- c("boxplots_NoNA", "boxplots_ThrNA", "boxplots_RandomNA",
-                       "correlationPlot_NoNA", "correlationPlot_ThrNA", 
-                       "correlationPlot_RandomNA",
-                       "NAProbabiltyPlot_NoNA", "NAProbabiltyPlot_ThrNA", 
-                       "NAProbabiltyPlot_RandomNA",
-                       "boxplots_NoNA.norm", "boxplots_ThrNA.norm", 
-                       "boxplots_RandomNA.norm")
+    
+    names(ptlist) <-  paste0(c("boxplots_No", "boxplots_Thr", "boxplots_Random",
+                               "correlationPlot_No", "correlationPlot_Thr", 
+                               "correlationPlot_Random",
+                               "probabiltyPlot_No", "probabiltyPlot_Thr", 
+                               "probabiltyPlot_Random",
+                               "boxplots_norm_No", "boxplots_norm_Thr", 
+                               "boxplots_norm_Random"), NAval)
     to_delete <- !sapply(ptlist, is.null)
     ptlist <- ptlist[to_delete] 
     if (length(ptlist) == 0) return(NULL)
@@ -437,29 +496,36 @@ generatePlots <- function(input, mtxs, output, seed) {
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/2, nrow = 2)
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/3, nrow = 3)
     
+    if (NAval == 0) {
+      NAvalStr1 <- "Zero"
+      NAvalStr2 <- "zero"
+    } else {
+      NAvalStr1 <- NAvalStr2 <- NAval
+    }
+    
     grid.arrange( arrangeGrob(
       grid::textGrob("Sample\ndistributions\n(unnormalized)",
                      gp = grid::gpar(fontsize = 10, fontface = "bold")),
-      grid::textGrob(" NA Percentage vs.\nSample Mean\n(unnormalized)",
+      grid::textGrob(paste0(NAvalStr1, " Percentage\n vs.\nSample Mean\n(unnormalized)"),
                      gp = grid::gpar(fontsize = 10, fontface = "bold")),
-      grid::textGrob("Intensity vs.\nNA Probability\n(unnormalized)",
+      grid::textGrob(paste0("Intensity\n vs.\n", NAvalStr1, " Probability\n(unnormalized)"),
                      gp = grid::gpar(fontsize = 10, fontface = "bold")),
       grid::textGrob("Sample\ndistributions\n(normalized)",
                      gp = grid::gpar(fontsize = 10, fontface = "bold")),
       nrow = 4),
       arrangeGrob(pt1, pt4, pt7, pt10, 
                   top = ggpubr::text_grob(
-                    "No NAs", 
+                    paste0("No ", NAvalStr2, "s"), 
                     size = 15, face = "bold"), nrow = 4), 
       arrangeGrob(pt2, pt5, pt8, pt11, 
                   top = ggpubr::text_grob(
-                    "Sample-dependent detection limit-related NAs", 
+                    paste0("Sample-dependent detection limit-related ", NAvalStr2, "s"), 
                     size = 15, face = "bold"), nrow = 4),
       arrangeGrob(pt3, pt6, pt9, pt12, 
                   top = ggpubr::text_grob(
-                    "Random NAs", 
+                    paste0("Random ", NAvalStr2, "s"), 
                     size = 15, face = "bold"), nrow = 4),
-      ncol = 4, widths = c(1,4,4,4))
+      ncol = 4, widths = c(1, 4, 4, 4))
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/4)
     
   })
@@ -505,12 +571,15 @@ ui <- fluidPage(
           title = "Primary simulation parameters",
           status = "danger",
           collapsed = FALSE,
+          radioButtons("NAval", "Missing quantities:",
+                       c("NAs" = "NA",
+                         "Zeros" =  "0")),
           sliderInput(inputId ="q50", 
-                      label = "Quantile where prob(NA) should be 50% (q50):",
+                      label = "Quantile where prob(NA/Zero) should be 50% (q50):",
                       min = 0, max = 1, step = 0.01,
                       value = 0.4),
           sliderInput(inputId ="q90", 
-                      label = "Quantile where prob(NA) should be 90% (q90):",
+                      label = "Quantile where prob(NA/Zero) should be 90% (q90):",
                       min = 0, max = 1, step = 0.01,
                       value = 0.2),
           sliderInput(inputId ="qSD", 
@@ -520,7 +589,7 @@ ui <- fluidPage(
           sliderInput(inputId ="sdSamples", 
                       label = "SD of noise which affects each sample in the same way:",
                       min = 0, max = 10, step = 0.1,
-                      value = 0.1),
+                      value = 0.1)
           # checkboxInput("savePlots", "Save plots as files", FALSE),
         )
       ),
