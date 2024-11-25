@@ -326,6 +326,7 @@ generateMatrices <- function(input, seed, saveParameters = FALSE) {
   sdSamples <- input$sdSamples # 1
   sdFeatures <- input$sdFeatures # 2
   
+  if (input$savePlots) saveParameters <- TRUE
   if (saveParameters) writeLines(
     paste0("nSamples: ", nSamples,
            "\nnAnalytes: ", nAnalytes, 
@@ -590,7 +591,7 @@ ui <- fluidPage(
                       label = "SD of noise which affects each sample in the same way:",
                       min = 0, max = 10, step = 0.1,
                       value = 0.1),
-          checkboxInput("savePlots", "Save plots as files", FALSE),
+          checkboxInput("savePlots", "Save plots as files", FALSE)
         )
       ),
       accordion(
