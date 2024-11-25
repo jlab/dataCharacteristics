@@ -367,18 +367,18 @@ generateMatrices <- function(input, seed, saveParameters = FALSE) {
   )
 }
 
-# saveData <- function(mtxs, seed){
-#   saveRDS(mtxs,file=paste0("dataMatrices_Seed", seed, ".RDS"))
-# }
-# 
-# savePlots <- function(ptlist, seed){
-#   for (i in seq(length(ptlist))){
-#     ggsave(filename = paste0(names(ptlist)[i], "_Seed", seed, ".pdf"), 
-#            plot = ptlist[[i]],
-#            width = 5,
-#            height = 4)
-#   }
-# }
+saveData <- function(mtxs, seed){
+  saveRDS(mtxs,file=paste0("dataMatrices_Seed", seed, ".RDS"))
+}
+
+doSavePlots <- function(ptlist, seed){
+  for (i in seq(length(ptlist))){
+    ggsave(filename = paste0(names(ptlist)[i], "_Seed", seed, ".pdf"),
+           plot = ptlist[[i]],
+           width = 5,
+           height = 4)
+  }
+}
 
 generatePlots <- function(input, mtxs, output, seed) {
   NAval <- input$NAval
@@ -389,7 +389,7 @@ generatePlots <- function(input, mtxs, output, seed) {
     NAval <- 0
   }
   
-  # savePlots <- input$savePlots
+  savePlots <- input$savePlots
   yValueMin <- min(c(c(mtxs$dat), c(mtxs$datThrNA), c(mtxs$datRandomNA)), 
                    na.rm = TRUE)
   yValueMax <- max(c(c(mtxs$dat), c(mtxs$datThrNA), c(mtxs$datRandomNA)), 
@@ -491,12 +491,12 @@ generatePlots <- function(input, mtxs, output, seed) {
     ptlist <- ptlist[to_delete] 
     if (length(ptlist) == 0) return(NULL)
     
-    # if (savePlots) savePlots(ptlist, seed)
+    if (savePlots) doSavePlots(ptlist, seed)
     
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/2, nrow = 2)
     # grid.arrange(grobs=ptlist,ncol=length(ptlist)/3, nrow = 3)
     
-    if (NAval == 0) {
+    if (!is.na(NAval)) {
       NAvalStr1 <- "Zero"
       NAvalStr2 <- "zero"
     } else {
@@ -589,8 +589,8 @@ ui <- fluidPage(
           sliderInput(inputId ="sdSamples", 
                       label = "SD of noise which affects each sample in the same way:",
                       min = 0, max = 10, step = 0.1,
-                      value = 0.1)
-          # checkboxInput("savePlots", "Save plots as files", FALSE),
+                      value = 0.1),
+          checkboxInput("savePlots", "Save plots as files", FALSE),
         )
       ),
       accordion(
