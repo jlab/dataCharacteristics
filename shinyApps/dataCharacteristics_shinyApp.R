@@ -1,4 +1,4 @@
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+#setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 library(shiny)
 
@@ -488,7 +488,8 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
                     "scProteomics" = "#806FC4",
                     "scRNA-seq (unnormalized)" = "#DDA0DD",
                     "scRNA-seq (normalized)" = "#BA30B5",
-                    "Microbiome" = "#6911D3"
+                    "Microbiome" = "#6911D3",
+                    "JLAB Microbiome" = "#99C59E"
   )
   
   pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), 
@@ -626,12 +627,13 @@ integrateNewDataset <- function(mtx,
                                       .cols = Oldnames)
   data <- data %>% dplyr::mutate(`|Skewness|` = abs(Skewness))
   
-  data.allDatasets <-  read.csv("datasets_results_clean_renamed.csv",
-                                check.names = FALSE)
+ # data.allDatasets <-  read.csv("datasets_results_clean_renamed.csv",
+#                                check.names = FALSE)
+  data.allDatasets <-  read.csv("/home/ubuntu/updated_data.csv", check.names = FALSE)
   data.allDatasets$`Corr(Mean vs. % NA) (Samples) (p-Value)` <- 
-    data.allDatasets$`Corr(Mean vs. % NA) (Analytes) (p-Value)` <-
-    data.allDatasets$`Bimodality of sample correlations` <- NULL
-  
+  data.allDatasets$`Corr(Mean vs. % NA) (Analytes) (p-Value)` <-
+  data.allDatasets$`Bimodality of sample correlations` <- NULL
+
   
   
   levels <- c('Metabolomics (NMR)', 
@@ -654,7 +656,8 @@ integrateNewDataset <- function(mtx,
               'scProteomics',
               'scRNA-seq (unnormalized)',
               'scRNA-seq (normalized)',
-              'Microbiome'
+              'Microbiome',
+              'JLAB Microbiome'
   )
   
   data.allDatasets[, "Data type"] <- factor(data.allDatasets[, "Data type"], levels = levels)
@@ -714,7 +717,8 @@ getUMAPNewDataset <- function(df, groupColName = "") {
                     "scProteomics" = "#806FC4",
                     "scRNA-seq (unnormalized)" = "#DDA0DD",
                     "scRNA-seq (normalized)" = "#BA30B5",
-                    "Microbiome" = "#6911D3"
+                    "Microbiome" = "#6911D3",
+                    "JLAB Microbiome" = "#99C59E"
   )
   
   set.seed(142)
@@ -964,7 +968,8 @@ ui <- fluidPage(
                                 'scProteomics',
                                 'scRNA-seq (unnormalized)',
                                 'scRNA-seq (normalized)',
-                                'Microbiome'),
+                                'Microbiome', 
+                                'JLAB Microbiome'),
                    selected = "Proteomics (LFQ, PRIDE)"),
       br(),
       actionButton("run_button", "Run Analysis", icon = icon("play")),

@@ -600,13 +600,12 @@ getDataCharacteristicsLogNoLog <- function(mtx, takeLog2 = FALSE, fast = TRUE) {
 getDataCharacteristics <- function(mtx, datasetID="test", dataType="test", ignoreRDS=FALSE) {
   resultName <- paste0(dataType,"__",datasetID)
   
-  dir.create("Results",showWarnings = F)
-  rdsName <- paste0("Results/",resultName,".RDS")
-
+  rdsName <- paste0(resultName,".RDS")
+  print(rdsName)
+  
   ## Load if already calcuated  
   if(file.exists(rdsName) && !ignoreRDS){
     lst <- readRDS(file=rdsName)
-  
     
   ## Calculate and save if already calcuated:
   } else {
@@ -868,7 +867,7 @@ getDataCharacteristicsForDataType <- function(dataType) {
   print(dataType)
   
   lst <- list()
-  path <- "./"
+  path <- "~/Data/"
   dataTypePath <- paste0(path, dataType)
   if (dataType == "microarray"){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
@@ -901,13 +900,30 @@ getDataCharacteristicsForDataType <- function(dataType) {
                                   colsToRemove = c("Gene ID", "Gene Name", "GeneID"),
                                   zerosToNA = TRUE,
                                   lst = lst)
+  } else if (dataType == "jlab_microbiome"){
+    lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
+                                  rowLabelCol = "#OTU ID", 
+                                  colsToRemove = c("#OTU ID"),
+                                  zerosToNA = TRUE,
+                                  lst = lst)
+  } else if (dataType == "marbel"){
+    lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
+                                  rowLabelCol = "name", 
+                                  colsToRemove = c("name"),
+                                  zerosToNA = TRUE,
+                                  lst = lst)
+  } else if (dataType == "metatranscriptomics"){
+    lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
+                                  rowLabelCol = "Name", 
+                                  colsToRemove = c("Name"),
+                                  zerosToNA = TRUE,
+                                  lst = lst)
   } else if (dataType %in% c("RNAseq_fpkms_median", "RNAseq_tpms_median", "microbiome")){
     lst <- readInAllDataTypeFiles(dataTypePath = dataTypePath, 
                                   rowLabelCol = 1, 
                                   colsToRemove = c(),
                                   zerosToNA = TRUE,
                                   lst = lst)
-  } else if (dataType == "proteomics_expressionatlas"){
     dataTypeFilePaths <- list.files(dataTypePath, full.names = TRUE)
     for (dataTypeFilePath in dataTypeFilePaths){
       print(dataTypeFilePath)
@@ -1003,6 +1019,7 @@ getDataCharacteristicsForDataType <- function(dataType) {
   } 
   
   lst.df <- rbindlist(lst, fill = TRUE)
+  print("reached")
   write.csv(lst.df, paste0("dataCharacteristics_", dataType, ".csv"), row.names = FALSE)
   
   session <- sessionInfo()
@@ -1029,9 +1046,19 @@ dataTypes <- c(
 #path <- "./"
 
 # lst <- list()
-for (dataType in dataTypes){
-  getDataCharacteristicsForDataType(dataType)
-}
+
+# for (dataType in dataTypes){
+#   getDataCharacteristicsForDataType(dataType)
+#}
+
+getDataCharacteristicsForDataType('jlab_microbiome')
+
+getDataCharacteristicsForDataType('marbel')
+
+getDataCharacteristicsForDataType('metatranscriptomics')
+
+#getDataCharacteristicsForDataType('marbel')
+#getDataCharacteristicsForDataType('metatranscriptomics')
 
 # cl <- parallel::makeCluster(7, outfile="")
 # doParallel::registerDoParallel(cl)
