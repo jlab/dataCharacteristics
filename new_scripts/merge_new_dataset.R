@@ -3,6 +3,18 @@ data_type_name <- "JLAB Microbiome"
 previous_base <- "/home/ubuntu/dataCharacteristics/shinyApps/datasets_results_clean_renamed.csv"
 new_data_base <- "/home/ubuntu/dataCharacteristics/new_data/datasets_results_appended.csv"
 
+new_csv_file <- "/home/ubuntu/dataCharacteristics/new_data/dataCharacteristics_marbel.csv"
+data_type_name <- "Marbel"
+previous_base <- new_data_base
+new_data_base <- "/home/ubuntu/dataCharacteristics/new_data/datasets_results_microbiome_marbel.csv"
+
+new_csv_file <- "/home/ubuntu/dataCharacteristics/new_data/dataCharacteristics_metatranscriptomics.csv"
+data_type_name <- "Metatranscriptomic"
+previous_base <- new_data_base
+new_data_base <- "/home/ubuntu/dataCharacteristics/new_data/datasets_results_microbiome_marbel_metatranscriptomics.csv"
+
+
+
 data <- read.csv(new_csv_file, check.names = FALSE)
 
 data$prctPC1.wNAs.log2 <- 100 * data$prctPC1.wNAs.log2

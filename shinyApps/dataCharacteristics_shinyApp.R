@@ -33,7 +33,33 @@ options(spinner.color = "#0275D8", spinner.color.background = "#ffffff",
         spinner.size = 2)
 ################################################################################
 
+source("/home/ubuntu/dataCharacteristics/shinyApps/inialize_helper.R")
+
 `%notin%` <- Negate(`%in%`)
+
+customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
+                  "Metabolomics (MS)" = "#0033CC",
+                  "Lipidomics (MS)" = "#000000",
+                  
+                  "Proteomics (LFQ, PRIDE)" = "#800000",
+                  "Proteomics (Intensity, PRIDE)" =  "#DC143C",
+                  "Proteomics (iBAQ, PRIDE)" = "#DE4B7E",
+                  "Proteomics (Intensity, Expression Atlas)" = "#FF6600",
+                  "Proteomics (iBAQ, Expression Atlas)" = "#FFC0CB",
+                  
+                  "RNA-seq (raw)" = "#2E5F72",
+                  "RNA-seq (FPKM)" = "#467741",
+                  "RNA-seq (TPM)" = "#32CD32",
+                  "Microarray" = "#5BB3B1",
+                  
+                  "scProteomics" = "#806FC4",
+                  "scRNA-seq (unnormalized)" = "#DDA0DD",
+                  "scRNA-seq (normalized)" = "#BA30B5",
+                  "Microbiome" = "#6911D3",
+                  "JLAB Microbiome" = "#99C59E",
+                  "Marbel" = "#f73939",
+                  "Metatranscriptomic" = "#fff100"
+)
 
 removeEmptyRowsAndColumns <- function(mtx, zerosToNA = FALSE){
   if (zerosToNA) mtx[mtx == 0] <- NA
@@ -470,28 +496,6 @@ plotPCABiplotNewDataset <- function(df, groups= c(), alpha = 0.5,
 plot3DPCA <- function(df, groupColName = "", addStr = "", 
                       pcaMethod = "nipals") {
   
-  customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
-                    "Metabolomics (MS)" = "#0033CC",
-                    "Lipidomics (MS)" = "#000000",
-                    
-                    "Proteomics (LFQ, PRIDE)" = "#800000",
-                    "Proteomics (Intensity, PRIDE)" =  "#DC143C",
-                    "Proteomics (iBAQ, PRIDE)" = "#DE4B7E",
-                    "Proteomics (Intensity, Expression Atlas)" = "#FF6600",
-                    "Proteomics (iBAQ, Expression Atlas)" = "#FFC0CB",
-                    
-                    "RNA-seq (raw)" = "#2E5F72",
-                    "RNA-seq (FPKM)" = "#467741",
-                    "RNA-seq (TPM)" = "#32CD32",
-                    "Microarray" = "#5BB3B1",
-                    
-                    "scProteomics" = "#806FC4",
-                    "scRNA-seq (unnormalized)" = "#DDA0DD",
-                    "scRNA-seq (normalized)" = "#BA30B5",
-                    "Microbiome" = "#6911D3",
-                    "JLAB Microbiome" = "#99C59E"
-  )
-  
   pca <- pcaMethods::pca(df %>% dplyr::select(-!!groupColName), 
                          method = pcaMethod, nPcs = 4, center = TRUE
                          , scale = "uv")
@@ -507,7 +511,7 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
                          color = ~as.factor(dat.woNewDataset[[groupColName]]),
                          colors = customColors,
                          type = "scatter3d", mode = "markers",
-                         marker = list(size = 3, opacity = 0.5),
+                         marker = list(size = 3, opacity = 0.7),
                          hovertext = paste("Dataset ID :", 
                                            dat.woNewDataset$Row.names)
                          # , alpha = 0.75
@@ -519,13 +523,6 @@ plot3DPCA <- function(df, groupColName = "", addStr = "",
       legend = list(itemsizing = "constant")
     )
   
-  fig <- plotly::add_trace(fig, 
-                           x = newDataset$PC1, 
-                           y = newDataset$PC2, 
-                           z = newDataset$PC3, 
-                           type = "scatter3d", 
-                           mode = "markers", color = I("#fff100"), 
-                           inherit = FALSE, name = "Provided Dataset")
   
   
   fig
@@ -629,7 +626,7 @@ integrateNewDataset <- function(mtx,
   
  # data.allDatasets <-  read.csv("datasets_results_clean_renamed.csv",
 #                                check.names = FALSE)
-  data.allDatasets <-  read.csv("/home/ubuntu/updated_data.csv", check.names = FALSE)
+  data.allDatasets <-  read.csv("/home/ubuntu/dataCharacteristics/new_data/datasets_results_microbiome_marbel_metatranscriptomics.csv", check.names = FALSE)
   data.allDatasets$`Corr(Mean vs. % NA) (Samples) (p-Value)` <- 
   data.allDatasets$`Corr(Mean vs. % NA) (Analytes) (p-Value)` <-
   data.allDatasets$`Bimodality of sample correlations` <- NULL
@@ -657,7 +654,9 @@ integrateNewDataset <- function(mtx,
               'scRNA-seq (unnormalized)',
               'scRNA-seq (normalized)',
               'Microbiome',
-              'JLAB Microbiome'
+              'JLAB Microbiome',
+              'Marbel',
+              'Metatranscriptomic'
   )
   
   data.allDatasets[, "Data type"] <- factor(data.allDatasets[, "Data type"], levels = levels)
@@ -699,28 +698,6 @@ plotCorrelation <- function(mtx.corr, plotTitle = "", plotSubtitle = "",
 
 getUMAPNewDataset <- function(df, groupColName = "") {
   
-  customColors <- c("Metabolomics (NMR)" = "#4BADF1", 
-                    "Metabolomics (MS)" = "#0033CC",
-                    "Lipidomics (MS)" = "#000000",
-                    
-                    "Proteomics (LFQ, PRIDE)" = "#800000",
-                    "Proteomics (Intensity, PRIDE)" =  "#DC143C",
-                    "Proteomics (iBAQ, PRIDE)" = "#DE4B7E",
-                    "Proteomics (Intensity, Expression Atlas)" = "#FF6600",
-                    "Proteomics (iBAQ, Expression Atlas)" = "#FFC0CB",
-                    
-                    "RNA-seq (raw)" = "#2E5F72",
-                    "RNA-seq (FPKM)" = "#467741",
-                    "RNA-seq (TPM)" = "#32CD32",
-                    "Microarray" = "#5BB3B1",
-                    
-                    "scProteomics" = "#806FC4",
-                    "scRNA-seq (unnormalized)" = "#DDA0DD",
-                    "scRNA-seq (normalized)" = "#BA30B5",
-                    "Microbiome" = "#6911D3",
-                    "JLAB Microbiome" = "#99C59E"
-  )
-  
   set.seed(142)
   groupVec <- df[[groupColName]]
   rownames.df <- row.names(df)
@@ -745,11 +722,25 @@ getUMAPNewDataset <- function(df, groupColName = "") {
   newDataset <- umap_df[row.names(umap_df) == "newDataset",]
   dat.woNewDataset <- umap_df %>% 
     dplyr::filter(!!as.name(groupColName) != "newDataset")
+  
+  highlightTypes <- c("Metatranscriptomic", "Marbel", "JLAB Microbiome")
+  
+  # Add a column to indicate highlighted types
+  dat.woNewDataset <- dat.woNewDataset %>%
+    mutate(highlight = ifelse(`Data type`  %in% highlightTypes, "mark", "not_mark"))
+  
+  # Define custom marker properties for highlighted and normal points
+  markerProps <- list(
+    size = ~ifelse(highlight == "mark", 6, 3),  # Larger size for highlighted
+    opacity = ~ifelse(highlight == "mark", 1, 0.5),  # Higher opacity for highlighted
+    symbol = ~ifelse(highlight == "mark", "circle", "circle-open")  # Different symbol
+  )  
+  
   fig <- plotly::plot_ly(dat.woNewDataset, x = ~UMAP1, y = ~UMAP2, z = ~UMAP3,
                          color = ~as.factor(dat.woNewDataset[[groupColName]]),
                          colors = customColors,
                          type = "scatter3d", mode = "markers",
-                         marker = list(size = 3, opacity = 0.5),
+                         marker = markerProps,
                          hovertext = paste("Dataset ID :", 
                                            row.names(dat.woNewDataset))
   ) 
@@ -760,13 +751,6 @@ getUMAPNewDataset <- function(df, groupColName = "") {
       legend = list(itemsizing = "constant")
     )
   
-  fig <- plotly::add_trace(fig, 
-                           x = newDataset$UMAP1, 
-                           y = newDataset$UMAP2, 
-                           z = newDataset$UMAP3, 
-                           type = "scatter3d", 
-                           mode = "markers", color = I("#fff100"), 
-                           inherit = FALSE, name = "Provided Dataset")
   fig
 }
 
@@ -803,9 +787,11 @@ generatePlots <- function(mtx, output, omicsTypes){
                               "Proteomics (iBAQ, PRIDE, Other)"
     )),]
   
+  #TODO: add metatranscriptomics when need be
   data <- data %>% dplyr::group_by(`Data type`) %>% 
-    filter(n() > 5 | `Data type` == "newDataset") %>% ungroup
+    filter(n() > 5 | `Data type` == "newDataset" |  `Data type` == "Marbel" | `Data type` == "Metatranscriptomic") %>% ungroup
   data$`Data type` <- droplevels(data$`Data type`)
+
   ##############################################################################
   boxplotCols <- setdiff(
     unique(c("Dataset ID", "Data type", "# Samples", "# Analytes", 
@@ -969,7 +955,9 @@ ui <- fluidPage(
                                 'scRNA-seq (unnormalized)',
                                 'scRNA-seq (normalized)',
                                 'Microbiome', 
-                                'JLAB Microbiome'),
+                                'JLAB Microbiome',
+                                'Marbel',
+                                'Metatranscriptomic'),
                    selected = "Proteomics (LFQ, PRIDE)"),
       br(),
       actionButton("run_button", "Run Analysis", icon = icon("play")),
@@ -1010,13 +998,17 @@ server <- function(input, output){
   options(shiny.maxRequestSize = 100*1024^2) 
   
   data_input <- reactive({
-    validate(
-      need(input$tsv_input != "", "Please select a dataset")
-    )
-    req(input$tsv_input)
+    default_file_path <- "/home/ubuntu/Data/init/testiecountie.tsv"
     
-    mtx <- data.table::fread(input$tsv_input$datapath,
-                             header = input$header,
+    # Check if a user uploads a file; otherwise, use the default path
+    file_path <- if (!is.null(input$tsv_input)) {
+      input$tsv_input
+    } else {
+      default_file_path
+    }
+    
+    mtx <- data.table::fread(file_path,
+                             header = TRUE,
                              data.table = FALSE,
                              check.names = FALSE,
                              sep = '\t')
@@ -1033,14 +1025,28 @@ server <- function(input, output){
   
   omicsTypes <- eventReactive(input$run_button, input$omicsTypes)
   
-  plots <- eventReactive(input$run_button,{
-    generatePlots(data_input(), output, omicsTypes())
+  plots_initial <- reactive({
+    init_data = init_database()
+    generateInitialPCAandUMAP(init_data)
+  })
+  
+  plots <- reactive({
+    generatePlots(data_input(), output, omicsTypes = "Default")
   })
   
   gc() 
   
-  output$plotlyPCA <- renderPlotly(plots()[["plotlyPCA"]])
-  output$plotlyUMAP <- renderPlotly(plots()[["plotlyUMAP"]])
+  output$plotlyPCA <- renderPlotly({
+    req(plots())
+    plots()[["plotlyPCA"]]
+  })
+  
+  output$plotlyUMAP <- renderPlotly({
+    req(plots())
+    plots()[["plotlyUMAP"]]
+  })
+  
+  
   output$correlationplot <- renderPlot(plots()[["correlationplot"]])
   output$boxplot <- renderPlot(plots()[["gg.boxplot"]])
   output$dataCharacteristics <- renderUI(HTML(
